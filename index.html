@@ -154,7 +154,15 @@
 <!-- LOGIN -->
 <div id="loginScreen" style="display:none;">
   <div class="login-card">
-    <div class="login-logo">📞 Confirmaciones</div>
+    <div class="login-logo">
+      <svg width="36" height="36" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin-right:8px;">
+        <circle cx="32" cy="32" r="30" fill="#f59e0b" opacity="0.15"/>
+        <path d="M20 14c-1.1 0-2 .9-2 2v4c0 10.5 8.5 19 19 19h4c1.1 0 2-.9 2-2v-4c0-.6-.3-1.1-.8-1.5l-5-3.5c-.5-.4-1.2-.4-1.7 0l-2.3 1.6c-1.3-1-2.5-2.2-3.5-3.5l1.6-2.3c.4-.5.4-1.2 0-1.7l-3.5-5c-.4-.5-.9-.8-1.5-.8H20z" fill="#f59e0b"/>
+        <circle cx="44" cy="20" r="10" fill="#22c55e"/>
+        <path d="M39 20l3.5 3.5 6-6" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Confirmaciones
+    </div>
     <div class="login-sub">Sistema de Gestión · 10 Centros de Procesamiento</div>
     <div class="field-group">
       <label>Nombre de Usuario</label>
@@ -175,7 +183,15 @@
 <!-- APP -->
 <div id="appScreen">
   <div class="topbar">
-    <div class="topbar-brand">📞 Confirmaciones</div>
+    <div class="topbar-brand" style="font-size:22px;display:flex;align-items:center;gap:8px;">
+      <svg width="28" height="28" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="32" cy="32" r="30" fill="#f59e0b" opacity="0.15"/>
+        <path d="M20 14c-1.1 0-2 .9-2 2v4c0 10.5 8.5 19 19 19h4c1.1 0 2-.9 2-2v-4c0-.6-.3-1.1-.8-1.5l-5-3.5c-.5-.4-1.2-.4-1.7 0l-2.3 1.6c-1.3-1-2.5-2.2-3.5-3.5l1.6-2.3c.4-.5.4-1.2 0-1.7l-3.5-5c-.4-.5-.9-.8-1.5-.8H20z" fill="#f59e0b"/>
+        <circle cx="44" cy="20" r="10" fill="#22c55e"/>
+        <path d="M39 20l3.5 3.5 6-6" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Confirmaciones
+    </div>
     <div class="topbar-user">
       <span id="topRolBadge" class="user-badge"></span>
       <span id="topCentro" style="color:var(--text2);font-size:13px;"></span>
@@ -223,8 +239,21 @@
             </select>
           </div>
           <div class="field-group">
+            <label>Documento Confirmado</label>
+            <select id="f_documento">
+              <option value="">— Seleccione —</option>
+              <option>Carta de Cancelación</option>
+              <option>Constancia Ingresos</option>
+              <option>Finiquito</option>
+            </select>
+          </div>
+          <div class="field-group">
             <label>Producto</label>
-            <input type="text" id="f_producto" placeholder="Nombre del producto">
+            <select id="f_producto">
+              <option value="">— Seleccione —</option>
+              <option>Crédito</option>
+              <option>Tarjeta</option>
+            </select>
           </div>
           <div class="field-group">
             <label>CAABF (Centro)</label>
@@ -267,7 +296,7 @@
             <thead>
               <tr>
                 <th>#</th><th>Centro</th><th>Gestión</th><th>Nombre Cliente</th>
-                <th>Fecha</th><th>Analista</th><th>Resultado</th><th>Producto</th>
+                <th>Fecha</th><th>Analista</th><th>Resultado</th><th>Documento</th><th>Producto</th>
                 <th>CAABF</th><th>Ingresado por</th><th>Observaciones</th><th>Acción</th>
               </tr>
             </thead>
@@ -560,11 +589,11 @@ async function guardarRegistro() {
     fechaIngreso:new Date().toLocaleString('es-GT'),
     gestion:get('f_gestion'), nombre:get('f_nombre'), fecha:get('f_fecha'),
     analista:get('f_analista'), resultado:get('f_resultado'),
-    producto:get('f_producto'), caabf:currentCentro, observaciones:get('f_observaciones'),
+    documento:get('f_documento'), producto:get('f_producto'), caabf:currentCentro, observaciones:get('f_observaciones'),
   };
   datos.push(reg);
   localStorage.setItem('confirmaciones', JSON.stringify(datos));
-  await supabaseInsert({ centro:reg.centro, usuario:reg.ingresadoPor, gestion:reg.gestion, nombre:reg.nombre, fecha_confirm:reg.fecha, analista:reg.analista, resultado:reg.resultado, producto:reg.producto, caabf:reg.caabf, observaciones:reg.observaciones });
+  await supabaseInsert({ centro:reg.centro, usuario:reg.ingresadoPor, gestion:reg.gestion, nombre:reg.nombre, fecha_confirm:reg.fecha, analista:reg.analista, resultado:reg.resultado, documento:reg.documento, producto:reg.producto, caabf:reg.caabf, observaciones:reg.observaciones });
   showToast('✅ Registro guardado correctamente.');
   limpiarForm();
   document.getElementById('f_fecha').valueAsDate = new Date();
@@ -573,7 +602,7 @@ async function guardarRegistro() {
 }
 
 function limpiarForm() {
-  ['f_gestion','f_nombre','f_fecha','f_resultado','f_producto','f_observaciones'].forEach(id=>document.getElementById(id).value='');
+  ['f_gestion','f_nombre','f_fecha','f_resultado','f_documento','f_producto','f_observaciones'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('f_caabf').value    = currentCentro||'';
   document.getElementById('f_analista').value = currentUser||'';
 }
@@ -608,7 +637,7 @@ function renderTabla() {
       <td><span style="font-weight:600;color:var(--accent)">${r.centro}</span></td>
       <td>${r.gestion}</td><td>${r.nombre}</td><td>${r.fecha}</td>
       <td>${r.analista}</td><td>${badgeResultado(r.resultado)}</td>
-      <td>${r.producto||'—'}</td><td>${r.caabf||'—'}</td>
+      <td>${r.documento||'—'}</td><td>${r.producto||'—'}</td><td>${r.caabf||'—'}</td>
       <td style="color:var(--text2)">${r.ingresadoPor} <span style="color:var(--text3);font-size:11px">(${r.centro})</span></td>
       <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;color:var(--text2)">${r.observaciones||'—'}</td>
       <td>${accionBtn}</td></tr>`;
@@ -778,8 +807,8 @@ function exportarCSV() {
   if (currentRol === 'subjefe') fuente = datos.filter(r=>r.centro===currentCentro);
   if (currentRol === 'user')    fuente = datos.filter(r=>r.ingresadoPor===currentUser);
   if (!fuente.length) { showToast('No hay datos para exportar.','#f59e0b'); return; }
-  const headers = ['Centro','Ingresado Por','Fecha Ingreso','Gestión','Nombre Cliente','Fecha Confirmación','Analista/Auxiliar','Resultado','Producto','CAABF','Observaciones','Modificado Por','Fecha Modificación'];
-  const rows = fuente.map(r=>[r.centro,r.ingresadoPor,r.fechaIngreso,r.gestion,r.nombre,r.fecha,r.analista,r.resultado,r.producto,r.caabf,(r.observaciones||'').replace(/,/g,';'),r.modificadoPor||'',r.fechaModificacion||''].map(v=>`"${v||''}"`).join(','));
+  const headers = ['Centro','Ingresado Por','Fecha Ingreso','Gestión','Nombre Cliente','Fecha Confirmación','Analista/Auxiliar','Resultado','Documento Confirmado','Producto','CAABF','Observaciones','Modificado Por','Fecha Modificación'];
+  const rows = fuente.map(r=>[r.centro,r.ingresadoPor,r.fechaIngreso,r.gestion,r.nombre,r.fecha,r.analista,r.resultado,r.documento||'',r.producto,r.caabf,(r.observaciones||'').replace(/,/g,';'),r.modificadoPor||'',r.fechaModificacion||''].map(v=>`"${v||''}"`).join(','));
   const csv = [headers.join(','),...rows].join('\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));
