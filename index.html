@@ -142,8 +142,17 @@
 </head>
 <body>
 
+<!-- LOADING -->
+<div id="loadingScreen" style="position:fixed;inset:0;background:#0f1117;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;">
+  <div style="font-size:48px;margin-bottom:16px;">📞</div>
+  <div style="font-family:'DM Serif Display',serif;font-size:24px;color:#4f8ef7;margin-bottom:12px;">Confirmaciones</div>
+  <div style="color:#5a5f7a;font-size:14px;margin-bottom:28px;">Cargando sistema...</div>
+  <div style="width:40px;height:40px;border:3px solid #2e3250;border-top-color:#4f8ef7;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+  <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+</div>
+
 <!-- LOGIN -->
-<div id="loginScreen">
+<div id="loginScreen" style="display:none;">
   <div class="login-card">
     <div class="login-logo">📞 Confirmaciones</div>
     <div class="login-sub">Sistema de Gestión · 10 Centros de Procesamiento</div>
@@ -411,11 +420,36 @@ let rolSeleccionado = 'user';
 let datos    = JSON.parse(localStorage.getItem('confirmaciones')    || '[]');
 let usuarios = JSON.parse(localStorage.getItem('usuarios_sistema')  || '[]');
 
-// Admin inicial
+// Admin inicial solo si no hay nada en localStorage
 if (!usuarios.length) {
   usuarios.push({ username:'admin', password:'admin123', rol:'admin', centro:null, creadoPor:'Sistema', fechaCreacion: new Date().toLocaleDateString('es-GT') });
   guardarUsuarios();
 }
+
+// Cargar usuarios desde Supabase al iniciar
+async function cargarUsuariosDesdeSupabase() {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/usuarios?select=*`, {
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && data.length > 0) {
+      usuarios = data.map(u => ({
+        username: u.username, password: u.password, rol: u.rol,
+        centro: u.centro, creadoPor: u.creado_por, fechaCreacion: u.fecha_creacion
+      }));
+      if (!usuarios.find(u => u.username === 'admin')) {
+        usuarios.unshift({ username:'admin', password:'admin123', rol:'admin', centro:null, creadoPor:'Sistema', fechaCreacion:'' });
+      }
+      guardarUsuarios();
+    }
+  } catch(e) {}
+  // Mostrar login solo después de cargar usuarios
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display   = 'flex';
+}
+cargarUsuariosDesdeSupabase();
 
 function guardarUsuarios() { localStorage.setItem('usuarios_sistema', JSON.stringify(usuarios)); }
 
@@ -497,8 +531,8 @@ document.getElementById('loginPass').addEventListener('keydown', e => { if (e.ke
 
 function doLogout() {
   currentUser = currentCentro = currentRol = null;
-  document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('appScreen').style.display   = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('loginUser').value = '';
   document.getElementById('loginPass').value = '';
   switchTab('registro');
