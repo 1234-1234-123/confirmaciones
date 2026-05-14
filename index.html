@@ -235,7 +235,7 @@
             <select id="f_resultado">
               <option value="">— Seleccione —</option>
               <option>Aprobado</option><option>Rechazado</option>
-              <option>Pendiente</option>
+              <option>En revisión</option><option>Pendiente</option>
             </select>
           </div>
           <div class="field-group">
@@ -286,7 +286,7 @@
             <select class="filter-select" id="filtResultado" onchange="renderTabla()">
               <option value="">Todos los resultados</option>
               <option>Aprobado</option><option>Rechazado</option>
-              <option>Pendiente</option>
+              <option>En revisión</option><option>Pendiente</option>
             </select>
             <input type="text" class="filter-select" id="filtBuscar" placeholder="🔍 Buscar..." style="width:160px;" oninput="renderTabla()">
           </div>
@@ -398,7 +398,7 @@
 <div class="modal-overlay" id="modalOverlay" onclick="cerrarModal(event)">
   <div class="modal">
     <h3>✏️ Editar Registro Pendiente</h3>
-    <div class="modal-sub">Solo puedes cambiar el Resultado y las Observaciones.</div>
+    <div class="modal-sub">Puedes cambiar el Resultado de registros Pendientes o En revisión.</div>
     <div class="modal-info" id="modalInfo"></div>
     <div class="field-group" style="margin-bottom:18px;">
       <label>Resultado</label>
@@ -406,6 +406,7 @@
         <option value="Pendiente">Pendiente</option>
         <option value="Aprobado">Aprobado</option>
         <option value="Rechazado">Rechazado</option>
+        <option value="En revisión">En revisión</option>
       </select>
     </div>
     <div class="field-group" style="margin-bottom:24px;">
@@ -627,7 +628,7 @@ function renderTabla() {
   empty.style.display = 'none';
 
   tbody.innerHTML = filtered.map((r,i) => {
-    const esPendiente = r.resultado === 'Pendiente';
+    const esPendiente = r.resultado === 'Pendiente' || r.resultado === 'En revisión';
     const accionBtn = esPendiente
       ? `<button class="edit-btn" onclick="abrirModal(${r.id})">✏️ Actualizar</button>`
       : `<span style="color:var(--text3);font-size:12px;">—</span>`;
@@ -645,7 +646,7 @@ function renderTabla() {
 
 function badgeResultado(v) {
   if (!v) return '—';
-  const map = {'Aprobado':'badge-yes','Rechazado':'badge-no','Pendiente':'badge-pend'};
+  const map = {'Aprobado':'badge-yes','Rechazado':'badge-no','En revisión':'badge-pend','Pendiente':'badge-pend'};
   return `<span class="badge ${map[v]||''}">${v}</span>`;
 }
 
