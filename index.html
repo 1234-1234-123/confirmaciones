@@ -286,7 +286,7 @@
             <select class="filter-select" id="filtResultado" onchange="renderTabla()">
               <option value="">Todos los resultados</option>
               <option>Aprobado</option><option>Rechazado</option>
-              <option>En revisión</option><option>Pendiente</option>
+              <option>Pendiente</option>
             </select>
             <input type="text" class="filter-select" id="filtBuscar" placeholder="🔍 Buscar..." style="width:160px;" oninput="renderTabla()">
           </div>
@@ -406,7 +406,6 @@
         <option value="Pendiente">Pendiente</option>
         <option value="Aprobado">Aprobado</option>
         <option value="Rechazado">Rechazado</option>
-        <option value="En revisión">En revisión</option>
       </select>
     </div>
     <div class="field-group" style="margin-bottom:24px;">
@@ -646,7 +645,7 @@ function renderTabla() {
 
 function badgeResultado(v) {
   if (!v) return '—';
-  const map = {'Aprobado':'badge-yes','Rechazado':'badge-no','En revisión':'badge-pend','Pendiente':'badge-pend'};
+  const map = {'Aprobado':'badge-yes','Rechazado':'badge-no','Pendiente':'badge-pend'};
   return `<span class="badge ${map[v]||''}">${v}</span>`;
 }
 
