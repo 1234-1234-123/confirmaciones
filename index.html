@@ -336,15 +336,24 @@
       </div>
 
       <div class="stats-grid" id="statsGrid"></div>
+
+      <!-- Metas por centro (solo admin) -->
+      <div class="table-card" id="metasCentroCard" style="margin-bottom:24px;">
+        <div class="table-header">
+          <h2>🎯 Metas por Centro</h2>
+          <span id="metasLockMsg" style="font-size:12px;color:var(--text3);"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Centro</th><th>Gestiones del Mes</th><th>% Objetivo</th><th>Meta (confirmaciones)</th></tr></thead>
+            <tbody id="metasBody"></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="table-card">
         <div class="table-header">
           <h2>Resumen por Centro de Procesamiento</h2>
-          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2);">
-            <span>Meta de gestiones por centro:</span>
-            <input type="number" id="metaGestiones" value="100" min="1"
-              style="width:80px;padding:6px 10px;font-size:13px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);"
-              onchange="renderReportes()">
-          </div>
         </div>
         <div class="table-wrap">
           <table>
@@ -763,11 +772,57 @@ async function guardarEdicion() {
   showToast('✅ Registro actualizado correctamente.');
 }
 
+// ── METAS POR CENTRO ──
+const CENTROS_LIST = ['Petapa','Zona 1','Torre 2','Coban','Mazate','Totonicapan','Monjas','Escuintla','Peten','Zacapa'];
+
+// Cargar metas guardadas o defaults
+let metasCentro = JSON.parse(localStorage.getItem('metasCentro') || 'null') ||
+  Object.fromEntries(CENTROS_LIST.map(c => [c, { gestiones: 100, objetivo: 20 }]));
+
+function guardarMetas() { localStorage.setItem('metasCentro', JSON.stringify(metasCentro)); }
+
+function renderMetasCentro() {
+  const esAdmin = currentRol === 'admin';
+  const lockMsg = document.getElementById('metasLockMsg');
+  if (lockMsg) lockMsg.textContent = esAdmin ? '✏️ Solo visible y editable para administradores' : '🔒 Solo el administrador puede modificar las metas';
+
+  const centros = esAdmin ? CENTROS_LIST : [currentCentro];
+  document.getElementById('metasCentroCard').style.display = '';
+
+  document.getElementById('metasBody').innerHTML = centros.map(c => {
+    const m = metasCentro[c] || { gestiones:100, objetivo:20 };
+    const metaConf = Math.round(m.gestiones * m.objetivo / 100);
+    const disabled = esAdmin ? '' : 'disabled style="opacity:.5;cursor:not-allowed;"';
+    return `<tr>
+      <td style="font-weight:600;color:var(--accent)">${c}</td>
+      <td><input type="number" value="${m.gestiones}" min="1" ${disabled}
+        style="width:90px;padding:6px 10px;font-size:13px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);"
+        onchange="actualizarMeta('${c}','gestiones',this.value)"></td>
+      <td><div style="display:flex;align-items:center;gap:6px;">
+        <input type="number" value="${m.objetivo}" min="1" max="100" ${disabled}
+          style="width:70px;padding:6px 10px;font-size:13px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);"
+          onchange="actualizarMeta('${c}','objetivo',this.value)">
+        <span style="color:var(--text2)">%</span>
+      </div></td>
+      <td><span style="background:rgba(124,92,252,.15);color:#a78bfa;padding:4px 12px;border-radius:8px;font-weight:700;font-size:13px;">${metaConf}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function actualizarMeta(centro, campo, valor) {
+  if (currentRol !== 'admin') return;
+  if (!metasCentro[centro]) metasCentro[centro] = { gestiones:100, objetivo:20 };
+  metasCentro[centro][campo] = parseInt(valor) || 0;
+  guardarMetas();
+  renderReportes();
+}
+
 // ── REPORTES ──
 function renderReportes() {
   const desde = document.getElementById('repFechaDesde')?.value || '';
   const hasta = document.getElementById('repFechaHasta')?.value || '';
-  const meta  = parseInt(document.getElementById('metaGestiones')?.value) || 100;
+
+  renderMetasCentro();
 
   // Filtrar por fecha y rol
   let fuente = datos.filter(r => {
@@ -778,44 +833,41 @@ function renderReportes() {
   if (currentRol === 'subjefe') fuente = fuente.filter(r=>r.centro===currentCentro);
   if (currentRol === 'user')    fuente = fuente.filter(r=>r.ingresadoPor===currentUser);
 
-  const total=fuente.length,
-        apr=fuente.filter(r=>r.resultado==='Aprobado').length,
-        rec=fuente.filter(r=>r.resultado==='Rechazado').length,
-        pend=fuente.filter(r=>r.resultado==='Pendiente').length,
-        confirmados=apr+rec,
-        pct=total?Math.round(confirmados/total*100):0;
-
+  const total   = fuente.length;
+  const apr     = fuente.filter(r=>r.resultado==='Aprobado').length;
+  const rec     = fuente.filter(r=>r.resultado==='Rechazado').length;
+  const pend    = fuente.filter(r=>r.resultado==='Pendiente').length;
+  const conf    = apr + rec;
   const subLabel = currentRol==='admin' ? 'todos los centros' : currentRol==='subjefe' ? currentCentro : currentUser;
 
   document.getElementById('statsGrid').innerHTML = `
     <div class="stat-card"><div class="stat-label">Total Registros</div><div class="stat-value">${total}</div><div class="stat-sub">${subLabel}</div></div>
-    <div class="stat-card"><div class="stat-label">Confirmados</div><div class="stat-value" style="color:#4ade80">${confirmados}</div><div class="stat-sub">Aprobados + Rechazados</div></div>
+    <div class="stat-card"><div class="stat-label">Confirmados</div><div class="stat-value" style="color:#4ade80">${conf}</div><div class="stat-sub">Aprobados + Rechazados</div></div>
     <div class="stat-card"><div class="stat-label">Aprobados</div><div class="stat-value" style="color:#4ade80">${apr}</div><div class="stat-sub">&nbsp;</div></div>
     <div class="stat-card"><div class="stat-label">Rechazados</div><div class="stat-value" style="color:#f87171">${rec}</div><div class="stat-sub">&nbsp;</div></div>
-    <div class="stat-card"><div class="stat-label">Pendientes</div><div class="stat-value" style="color:#fbbf24">${pend}</div><div class="stat-sub">requieren acción</div></div>
-    <div class="stat-card"><div class="stat-label">% Confirmación</div><div class="stat-value" style="color:#a78bfa">${pct}%</div><div class="stat-sub">confirmados / total</div></div>`;
+    <div class="stat-card"><div class="stat-label">Pendientes</div><div class="stat-value" style="color:#fbbf24">${pend}</div><div class="stat-sub">requieren acción</div></div>`;
 
-  const centros = (currentRol==='admin')
-    ? ['Petapa','Zona 1','Torre 2','Coban','Mazate','Totonicapan','Monjas','Escuintla','Peten','Zacapa']
-    : [currentCentro];
+  const centros = currentRol==='admin' ? CENTROS_LIST : [currentCentro];
 
   document.getElementById('reporteBody').innerHTML = centros.map(c => {
-    const regs  = fuente.filter(r=>r.centro===c);
-    const a     = regs.filter(r=>r.resultado==='Aprobado').length;
-    const rc    = regs.filter(r=>r.resultado==='Rechazado').length;
-    const p     = regs.filter(r=>r.resultado==='Pendiente').length;
-    const conf  = a + rc;
-    const avance = meta ? Math.round(conf / meta * 100) : 0;
-    const colorAvance = avance >= 100 ? '#4ade80' : avance >= 50 ? '#fbbf24' : '#f87171';
+    const regs = fuente.filter(r=>r.centro===c);
+    const a    = regs.filter(r=>r.resultado==='Aprobado').length;
+    const rc   = regs.filter(r=>r.resultado==='Rechazado').length;
+    const p    = regs.filter(r=>r.resultado==='Pendiente').length;
+    const cf   = a + rc;
+    const m    = metasCentro[c] || { gestiones:100, objetivo:20 };
+    const metaConf = Math.round(m.gestiones * m.objetivo / 100);
+    const avance   = metaConf ? Math.round(cf / metaConf * 100) : 0;
+    const col      = avance >= 100 ? '#4ade80' : avance >= 50 ? '#fbbf24' : '#f87171';
     return `<tr>
       <td style="font-weight:600;color:var(--accent)">${c}</td>
       <td>${regs.length}</td>
-      <td><span class="badge badge-yes">${conf}</span></td>
+      <td><span class="badge badge-yes">${cf}</span></td>
       <td><span class="badge badge-yes">${a}</span></td>
       <td><span class="badge badge-no">${rc}</span></td>
       <td><span class="badge badge-pend">${p}</span></td>
-      <td style="color:var(--text2)">${meta}</td>
-      <td><span style="font-weight:700;color:${colorAvance}">${avance}%</span></td></tr>`;
+      <td style="color:var(--text2)">${metaConf} <span style="color:var(--text3);font-size:11px">(${m.objetivo}% de ${m.gestiones})</span></td>
+      <td><span style="font-weight:700;color:${col}">${avance}%</span></td></tr>`;
   }).join('');
 }
 
@@ -935,3 +987,4 @@ selectRole('user');
 </script>
 </body>
 </html>
+
