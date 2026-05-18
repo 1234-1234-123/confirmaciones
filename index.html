@@ -176,9 +176,6 @@
     <button class="btn btn-outline" style="width:100%;justify-content:center;margin-top:10px;" onclick="recargarUsuarios()">🔄 Sincronizar Usuarios</button>
     <div class="error-msg" id="loginError">⚠ Usuario o contraseña incorrectos.</div>
     <div class="error-msg" id="loginSuccess" style="background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.3);color:#4ade80;">✅ Usuarios sincronizados. Ahora puedes ingresar.</div>
-    <div style="margin-top:20px;font-size:12px;color:var(--text3);text-align:center;">
-      Cuenta Admin inicial → usuario: <strong style="color:var(--text2)">admin</strong> · contraseña: <strong style="color:var(--text2)">admin123</strong>
-    </div>
   </div>
 </div>
 
@@ -782,9 +779,14 @@ let metasCentro = JSON.parse(localStorage.getItem('metasCentro') || 'null') ||
 function guardarMetas() { localStorage.setItem('metasCentro', JSON.stringify(metasCentro)); }
 
 function renderMetasCentro() {
-  const esAdmin = currentRol === 'admin';
+  const esAdmin   = currentRol === 'admin';
+  const esSubjefe = currentRol === 'subjefe';
   const lockMsg = document.getElementById('metasLockMsg');
-  if (lockMsg) lockMsg.textContent = esAdmin ? '✏️ Solo visible y editable para administradores' : '🔒 Solo el administrador puede modificar las metas';
+  if (lockMsg) lockMsg.textContent = esAdmin
+    ? '✏️ Puedes editar gestiones y % objetivo'
+    : esSubjefe
+    ? '✏️ Puedes editar las gestiones de tu centro · El % objetivo solo lo cambia el Admin'
+    : '🔒 Solo visualización';
 
   const centros = esAdmin ? CENTROS_LIST : [currentCentro];
   document.getElementById('metasCentroCard').style.display = '';
@@ -792,14 +794,15 @@ function renderMetasCentro() {
   document.getElementById('metasBody').innerHTML = centros.map(c => {
     const m = metasCentro[c] || { gestiones:100, objetivo:20 };
     const metaConf = Math.round(m.gestiones * m.objetivo / 100);
-    const disabled = esAdmin ? '' : 'disabled style="opacity:.5;cursor:not-allowed;"';
+    const disabledGest = esAdmin || esSubjefe ? '' : 'disabled style="opacity:.5;cursor:not-allowed;"';
+    const disabledObj  = esAdmin ? '' : 'disabled style="opacity:.5;cursor:not-allowed;"';
     return `<tr>
       <td style="font-weight:600;color:var(--accent)">${c}</td>
-      <td><input type="number" value="${m.gestiones}" min="1" ${disabled}
+      <td><input type="number" value="${m.gestiones}" min="1" ${disabledGest}
         style="width:90px;padding:6px 10px;font-size:13px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);"
         onchange="actualizarMeta('${c}','gestiones',this.value)"></td>
       <td><div style="display:flex;align-items:center;gap:6px;">
-        <input type="number" value="${m.objetivo}" min="1" max="100" ${disabled}
+        <input type="number" value="${m.objetivo}" min="1" max="100" ${disabledObj}
           style="width:70px;padding:6px 10px;font-size:13px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);"
           onchange="actualizarMeta('${c}','objetivo',this.value)">
         <span style="color:var(--text2)">%</span>
@@ -810,7 +813,8 @@ function renderMetasCentro() {
 }
 
 function actualizarMeta(centro, campo, valor) {
-  if (currentRol !== 'admin') return;
+  // Admin puede cambiar todo; subjefe solo gestiones
+  if (currentRol !== 'admin' && !(currentRol === 'subjefe' && campo === 'gestiones')) return;
   if (!metasCentro[centro]) metasCentro[centro] = { gestiones:100, objetivo:20 };
   metasCentro[centro][campo] = parseInt(valor) || 0;
   guardarMetas();
@@ -987,4 +991,3 @@ selectRole('user');
 </script>
 </body>
 </html>
-
