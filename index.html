@@ -490,6 +490,30 @@ if (!usuarios.length) {
   guardarUsuarios();
 }
 
+// ── SUPABASE ──
+const SUPABASE_URL = 'https://lqvhzlrzbfddgssmixtw.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_0mBGFG7EWbYJloCcCS8HiQ_LUqbnEMe';
+
+function mapConfirmacion(r) {
+  return {
+    id:               r.id,
+    centro:           r.centro,
+    ingresadoPor:     r.usuario,
+    fechaIngreso:     r.fecha_ingreso || '',
+    gestion:          r.gestion,
+    nombre:           r.nombre,
+    fecha:            r.fecha_confirm,
+    analista:         r.analista,
+    resultado:        r.resultado,
+    documento:        r.documento,
+    producto:         r.producto,
+    caabf:            r.caabf,
+    observaciones:    r.observaciones,
+    modificadoPor:    r.modificado_por || '',
+    fechaModificacion:r.fecha_modificacion || ''
+  };
+}
+
 // Cargar usuarios Y confirmaciones desde Supabase al iniciar
 async function cargarUsuariosDesdeSupabase() {
   try {
@@ -533,31 +557,7 @@ async function cargarUsuariosDesdeSupabase() {
 }
 cargarUsuariosDesdeSupabase();
 
-function mapConfirmacion(r) {
-  return {
-    id:               r.id,
-    centro:           r.centro,
-    ingresadoPor:     r.usuario,
-    fechaIngreso:     r.fecha_ingreso || '',
-    gestion:          r.gestion,
-    nombre:           r.nombre,
-    fecha:            r.fecha_confirm,
-    analista:         r.analista,
-    resultado:        r.resultado,
-    documento:        r.documento,
-    producto:         r.producto,
-    caabf:            r.caabf,
-    observaciones:    r.observaciones,
-    modificadoPor:    r.modificado_por || '',
-    fechaModificacion:r.fecha_modificacion || ''
-  };
-}
-
 function guardarUsuarios() { localStorage.setItem('usuarios_sistema', JSON.stringify(usuarios)); }
-
-// ── SUPABASE ──
-const SUPABASE_URL = 'https://lqvhzlrzbfddgssmixtw.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_0mBGFG7EWbYJloCcCS8HiQ_LUqbnEMe';
 
 async function supabaseInsert(reg) {
   try {
@@ -1092,4 +1092,3 @@ selectRole('user');
 </script>
 </body>
 </html>
-
