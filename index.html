@@ -489,26 +489,60 @@ if (!usuarios.length) {
   guardarUsuarios();
 }
 
-// Cargar usuarios desde Supabase al iniciar
+// Cargar usuarios Y confirmaciones desde Supabase al iniciar
 async function cargarUsuariosDesdeSupabase() {
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/usuarios?select=*`, {
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
-    });
-    if (!res.ok) return;
-    const data = await res.json();
-    if (data && data.length > 0) {
-      usuarios = data.map(u => ({
-        username: u.username, password: u.password, rol: u.rol,
-        centro: u.centro, creadoPor: u.creado_por, fechaCreacion: u.fecha_creacion
-      }));
-      if (!usuarios.find(u => u.username === 'admin')) {
-        usuarios.unshift({ username:'admin', password:'admin123', rol:'admin', centro:null, creadoPor:'Sistema', fechaCreacion:'' });
+    const [resUsers, resConf] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/usuarios?select=*`, {
+        headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
+      }),
+      fetch(`${SUPABASE_URL}/rest/v1/confirmaciones?select=*&order=id.asc`, {
+        headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
+      })
+    ]);
+
+    // Cargar usuarios
+    if (resUsers.ok) {
+      const dataUsers = await resUsers.json();
+      if (dataUsers && dataUsers.length > 0) {
+        usuarios = dataUsers.map(u => ({
+          username: u.username, password: u.password, rol: u.rol,
+          centro: u.centro, creadoPor: u.creado_por, fechaCreacion: u.fecha_creacion
+        }));
+        if (!usuarios.find(u => u.username === 'admin')) {
+          usuarios.unshift({ username:'admin', password:'admin123', rol:'admin', centro:null, creadoPor:'Sistema', fechaCreacion:'' });
+        }
+        guardarUsuarios();
       }
-      guardarUsuarios();
     }
+
+    // Cargar confirmaciones
+    if (resConf.ok) {
+      const dataConf = await resConf.json();
+      if (dataConf && dataConf.length > 0) {
+        datos = dataConf.map(r => ({
+          id:           r.id,
+          centro:       r.centro,
+          ingresadoPor: r.usuario,
+          fechaIngreso: r.fecha_ingreso || '',
+          gestion:      r.gestion,
+          nombre:       r.nombre,
+          fecha:        r.fecha_confirm,
+          analista:     r.analista,
+          resultado:    r.resultado,
+          documento:    r.documento,
+          producto:     r.producto,
+          caabf:        r.caabf,
+          observaciones:r.observaciones,
+          modificadoPor:    r.modificado_por || '',
+          fechaModificacion:r.fecha_modificacion || ''
+        }));
+        localStorage.setItem('confirmaciones', JSON.stringify(datos));
+      }
+    }
+
   } catch(e) {}
-  // Mostrar login solo después de cargar usuarios
+  // Mostrar login solo después de cargar todo
   document.getElementById('loadingScreen').style.display = 'none';
   document.getElementById('loginScreen').style.display   = 'flex';
 }
@@ -557,21 +591,52 @@ async function recargarUsuarios() {
   btn.textContent = '⏳ Sincronizando...';
   btn.disabled = true;
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/usuarios?select=*`, {
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.length > 0) {
-        usuarios = data.map(u => ({
+    const [resUsers, resConf] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/usuarios?select=*`, {
+        headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
+      }),
+      fetch(`${SUPABASE_URL}/rest/v1/confirmaciones?select=*&order=id.asc`, {
+        headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
+      })
+    ]);
+
+    if (resUsers.ok) {
+      const dataUsers = await resUsers.json();
+      if (dataUsers && dataUsers.length > 0) {
+        usuarios = dataUsers.map(u => ({
           username: u.username, password: u.password, rol: u.rol,
           centro: u.centro, creadoPor: u.creado_por, fechaCreacion: u.fecha_creacion
         }));
         guardarUsuarios();
-        document.getElementById('loginSuccess').style.display = 'block';
-        document.getElementById('loginError').style.display   = 'none';
       }
     }
+
+    if (resConf.ok) {
+      const dataConf = await resConf.json();
+      if (dataConf && dataConf.length > 0) {
+        datos = dataConf.map(r => ({
+          id:               r.id,
+          centro:           r.centro,
+          ingresadoPor:     r.usuario,
+          fechaIngreso:     r.fecha_ingreso || '',
+          gestion:          r.gestion,
+          nombre:           r.nombre,
+          fecha:            r.fecha_confirm,
+          analista:         r.analista,
+          resultado:        r.resultado,
+          documento:        r.documento,
+          producto:         r.producto,
+          caabf:            r.caabf,
+          observaciones:    r.observaciones,
+          modificadoPor:    r.modificado_por || '',
+          fechaModificacion:r.fecha_modificacion || ''
+        }));
+        localStorage.setItem('confirmaciones', JSON.stringify(datos));
+      }
+    }
+
+    document.getElementById('loginSuccess').style.display = 'block';
+    document.getElementById('loginError').style.display   = 'none';
   } catch(e) {}
   btn.textContent = '🔄 Sincronizar Usuarios';
   btn.disabled = false;
@@ -697,6 +762,7 @@ function renderTabla() {
   const filtered = datos.filter(r => {
     if (filtCentro    && r.centro    !== filtCentro)    return false;
     if (filtResultado && r.resultado !== filtResultado) return false;
+    // Usuario solo ve sus propios registros; Sub Jefe ve todos los de su centro
     if (currentRol === 'user' && r.ingresadoPor !== currentUser) return false;
     if (desde && r.fecha < desde) return false;
     if (hasta && r.fecha > hasta) return false;
