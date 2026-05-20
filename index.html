@@ -684,7 +684,10 @@ function doLogin() {
   document.getElementById('f_fecha').valueAsDate = new Date();
   initFechasConsulta();
   initFechasReporte();
-  renderTabla(); renderReportes();
+  renderDashboard?.();
+  // Cargar datos frescos de Supabase inmediatamente
+  setTimeout(() => actualizarDesdeSupabase(), 100);
+  renderReportes();
 }
 
 document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
@@ -762,25 +765,41 @@ async function actualizarDesdeSupabase() {
   btn.textContent = '⏳ Cargando...';
   btn.disabled = true;
   try {
-    const centroFiltro = currentRol !== 'admin' ? `&centro=eq.${encodeURIComponent(currentCentro)}` : '';
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/confirmaciones?select=*&order=id.asc${centroFiltro}`,
-      { headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`} }
-    );
-    if (res.ok) {
-      const dataConf = await res.json();
-      if (currentRol === 'admin') {
-        datos = dataConf.map(r => mapConfirmacion(r));
-      } else {
-        datos = datos.filter(d => d.centro !== currentCentro);
-        datos = datos.concat(dataConf.map(r => mapConfirmacion(r)));
-      }
-      localStorage.setItem('confirmaciones', JSON.stringify(datos));
-      renderTabla();
-      showToast('✅ Datos actualizados correctamente.');
+    // Siempre traer todos los registros del centro (subjefe ve su centro, admin ve todo)
+    let url = `${SUPABASE_URL}/rest/v1/confirmaciones?select=*&order=id.asc`;
+    if (currentRol !== 'admin') {
+      url += `&centro=eq.${encodeURIComponent(currentCentro)}`;
     }
+
+    const res = await fetch(url, {
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
+    });
+
+    if (!res.ok) {
+      showToast('⚠ Error al conectar con Supabase.', '#f59e0b');
+      btn.textContent = '🔄 Actualizar';
+      btn.disabled = false;
+      return;
+    }
+
+    const dataConf = await res.json();
+
+    if (currentRol === 'admin') {
+      datos = dataConf.map(r => mapConfirmacion(r));
+    } else {
+      // Reemplazar registros del centro con los de Supabase
+      datos = datos.filter(d => d.centro !== currentCentro);
+      datos = datos.concat(dataConf.map(r => mapConfirmacion(r)));
+    }
+
+    localStorage.setItem('confirmaciones', JSON.stringify(datos));
+
+    const total = dataConf.length;
+    renderTabla();
+    showToast(`✅ ${total} registro(s) cargados desde Supabase.`);
+
   } catch(e) {
-    showToast('⚠ Error al conectar con Supabase.', '#f59e0b');
+    showToast('⚠ Error de conexión.', '#f59e0b');
   }
   btn.textContent = '🔄 Actualizar';
   btn.disabled = false;
