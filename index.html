@@ -290,6 +290,7 @@
             <input type="date" class="filter-select" id="filtFechaDesde" onchange="renderTabla()" style="width:145px;">
             <input type="date" class="filter-select" id="filtFechaHasta" onchange="renderTabla()" style="width:145px;">
             <input type="text" class="filter-select" id="filtBuscar" placeholder="🔍 Buscar..." style="width:140px;" oninput="renderTabla()">
+            <button class="btn btn-outline btn-sm" onclick="actualizarDesdeSupabase()" id="btnActualizar">🔄 Actualizar</button>
           </div>
         </div>
         <div class="table-wrap">
@@ -520,23 +521,7 @@ async function cargarUsuariosDesdeSupabase() {
     if (resConf.ok) {
       const dataConf = await resConf.json();
       if (dataConf && dataConf.length > 0) {
-        datos = dataConf.map(r => ({
-          id:           r.id,
-          centro:       r.centro,
-          ingresadoPor: r.usuario,
-          fechaIngreso: r.fecha_ingreso || '',
-          gestion:      r.gestion,
-          nombre:       r.nombre,
-          fecha:        r.fecha_confirm,
-          analista:     r.analista,
-          resultado:    r.resultado,
-          documento:    r.documento,
-          producto:     r.producto,
-          caabf:        r.caabf,
-          observaciones:r.observaciones,
-          modificadoPor:    r.modificado_por || '',
-          fechaModificacion:r.fecha_modificacion || ''
-        }));
+        datos = dataConf.map(r => mapConfirmacion(r));
         localStorage.setItem('confirmaciones', JSON.stringify(datos));
       }
     }
@@ -547,6 +532,26 @@ async function cargarUsuariosDesdeSupabase() {
   document.getElementById('loginScreen').style.display   = 'flex';
 }
 cargarUsuariosDesdeSupabase();
+
+function mapConfirmacion(r) {
+  return {
+    id:               r.id,
+    centro:           r.centro,
+    ingresadoPor:     r.usuario,
+    fechaIngreso:     r.fecha_ingreso || '',
+    gestion:          r.gestion,
+    nombre:           r.nombre,
+    fecha:            r.fecha_confirm,
+    analista:         r.analista,
+    resultado:        r.resultado,
+    documento:        r.documento,
+    producto:         r.producto,
+    caabf:            r.caabf,
+    observaciones:    r.observaciones,
+    modificadoPor:    r.modificado_por || '',
+    fechaModificacion:r.fecha_modificacion || ''
+  };
+}
 
 function guardarUsuarios() { localStorage.setItem('usuarios_sistema', JSON.stringify(usuarios)); }
 
@@ -700,7 +705,7 @@ function switchTab(name) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-'+name).classList.add('active');
   if (name==='reportes') renderReportes();
-  if (name==='consulta') renderTabla();
+  if (name==='consulta') { actualizarDesdeSupabase(); }
   if (name==='admin')    renderUsuarios();
 }
 
@@ -750,6 +755,36 @@ function initFechasReporte() {
   document.getElementById('repFechaHasta').value = ultimoDiaMes();
 }
 function resetFechasReporte() { initFechasReporte(); renderReportes(); }
+
+// ── ACTUALIZAR DESDE SUPABASE ──
+async function actualizarDesdeSupabase() {
+  const btn = document.getElementById('btnActualizar');
+  btn.textContent = '⏳ Cargando...';
+  btn.disabled = true;
+  try {
+    const centroFiltro = currentRol !== 'admin' ? `&centro=eq.${encodeURIComponent(currentCentro)}` : '';
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/confirmaciones?select=*&order=id.asc${centroFiltro}`,
+      { headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`} }
+    );
+    if (res.ok) {
+      const dataConf = await res.json();
+      if (currentRol === 'admin') {
+        datos = dataConf.map(r => mapConfirmacion(r));
+      } else {
+        datos = datos.filter(d => d.centro !== currentCentro);
+        datos = datos.concat(dataConf.map(r => mapConfirmacion(r)));
+      }
+      localStorage.setItem('confirmaciones', JSON.stringify(datos));
+      renderTabla();
+      showToast('✅ Datos actualizados correctamente.');
+    }
+  } catch(e) {
+    showToast('⚠ Error al conectar con Supabase.', '#f59e0b');
+  }
+  btn.textContent = '🔄 Actualizar';
+  btn.disabled = false;
+}
 
 // ── TABLA ──
 function renderTabla() {
@@ -1057,3 +1092,4 @@ selectRole('user');
 </script>
 </body>
 </html>
+
