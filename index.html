@@ -684,7 +684,6 @@ function doLogin() {
   document.getElementById('f_fecha').valueAsDate = new Date();
   initFechasConsulta();
   initFechasReporte();
-  renderDashboard?.();
   // Cargar datos frescos de Supabase inmediatamente
   setTimeout(() => actualizarDesdeSupabase(), 100);
   renderReportes();
