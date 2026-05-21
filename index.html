@@ -764,40 +764,35 @@ async function actualizarDesdeSupabase() {
   btn.textContent = '⏳ Cargando...';
   btn.disabled = true;
   try {
-    // Siempre traer todos los registros del centro (subjefe ve su centro, admin ve todo)
     let url = `${SUPABASE_URL}/rest/v1/confirmaciones?select=*&order=id.asc`;
     if (currentRol !== 'admin') {
       url += `&centro=eq.${encodeURIComponent(currentCentro)}`;
     }
-
+    console.log('URL:', url);
+    console.log('KEY:', SUPABASE_KEY.slice(0,20)+'...');
     const res = await fetch(url, {
       headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
     });
-
+    console.log('Status:', res.status);
     if (!res.ok) {
       showToast('⚠ Error al conectar con Supabase.', '#f59e0b');
       btn.textContent = '🔄 Actualizar';
       btn.disabled = false;
       return;
     }
-
     const dataConf = await res.json();
-
+    console.log('Registros:', dataConf.length, dataConf);
     if (currentRol === 'admin') {
       datos = dataConf.map(r => mapConfirmacion(r));
     } else {
-      // Reemplazar registros del centro con los de Supabase
       datos = datos.filter(d => d.centro !== currentCentro);
       datos = datos.concat(dataConf.map(r => mapConfirmacion(r)));
     }
-
     localStorage.setItem('confirmaciones', JSON.stringify(datos));
-
-    const total = dataConf.length;
     renderTabla();
-    showToast(`✅ ${total} registro(s) cargados desde Supabase.`);
-
+    showToast(`✅ ${dataConf.length} registro(s) cargados.`);
   } catch(e) {
+    console.log('Error:', e);
     showToast('⚠ Error de conexión.', '#f59e0b');
   }
   btn.textContent = '🔄 Actualizar';
