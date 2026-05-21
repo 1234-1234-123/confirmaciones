@@ -492,7 +492,7 @@ if (!usuarios.length) {
 
 // ── SUPABASE ──
 const SUPABASE_URL = 'https://lqvhzlrzbfddgssmixtw.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_0mBGFG7EWbYJloCcCS8HiQ_LUqbnEMe';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxxdmh6bHJ6YmZkZGdzc21peHR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2MDI2NDIsImV4cCI6MjA5NDE3ODY0Mn0._G331m37PuWtNvhBaghtv-uJEMToXz8pvN6ME7Ea3mY';
 
 function mapConfirmacion(r) {
   return {
@@ -502,7 +502,7 @@ function mapConfirmacion(r) {
     fechaIngreso:     r.fecha_ingreso || '',
     gestion:          r.gestion,
     nombre:           r.nombre,
-    fecha:            r.fecha_confirm || (r.fecha_ingreso ? r.fecha_ingreso.slice(0,10) : '') || '',
+    fecha:            r.fecha_confirm,
     analista:         r.analista,
     resultado:        r.resultado,
     documento:        r.documento,
@@ -561,12 +561,11 @@ function guardarUsuarios() { localStorage.setItem('usuarios_sistema', JSON.strin
 
 async function supabaseInsert(reg) {
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/confirmaciones`, {
+    await fetch(`${SUPABASE_URL}/rest/v1/confirmaciones`, {
       method:'POST', headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify(reg)
     });
-    if (!res.ok) console.error('Error insertando confirmación:', await res.text());
-  } catch(e) { console.error('Error conectando Supabase:', e); }
+  } catch(e) {}
 }
 async function supabaseUpdate(id, cambios) {
   try {
@@ -627,7 +626,7 @@ async function recargarUsuarios() {
           fechaIngreso:     r.fecha_ingreso || '',
           gestion:          r.gestion,
           nombre:           r.nombre,
-          fecha:            r.fecha_confirm || (r.fecha_ingreso ? r.fecha_ingreso.slice(0,10) : '') || '',
+          fecha:            r.fecha_confirm,
           analista:         r.analista,
           resultado:        r.resultado,
           documento:        r.documento,
@@ -685,7 +684,10 @@ function doLogin() {
   document.getElementById('f_fecha').valueAsDate = new Date();
   initFechasConsulta();
   initFechasReporte();
-  renderTabla(); renderReportes();
+  renderDashboard?.();
+  // Cargar datos frescos de Supabase inmediatamente
+  setTimeout(() => actualizarDesdeSupabase(), 100);
+  renderReportes();
 }
 
 document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
@@ -725,7 +727,7 @@ async function guardarRegistro() {
   };
   datos.push(reg);
   localStorage.setItem('confirmaciones', JSON.stringify(datos));
-  await supabaseInsert({ centro:reg.centro, usuario:reg.ingresadoPor, fecha_ingreso:new Date().toISOString(), gestion:reg.gestion, nombre:reg.nombre, fecha_confirm:reg.fecha || fechaHoyLocal(), analista:reg.analista, resultado:reg.resultado, documento:reg.documento, producto:reg.producto, caabf:reg.caabf, observaciones:reg.observaciones });
+  await supabaseInsert({ centro:reg.centro, usuario:reg.ingresadoPor, gestion:reg.gestion, nombre:reg.nombre, fecha_confirm:reg.fecha, analista:reg.analista, resultado:reg.resultado, documento:reg.documento, producto:reg.producto, caabf:reg.caabf, observaciones:reg.observaciones });
   showToast('✅ Registro guardado correctamente.');
   limpiarForm();
   document.getElementById('f_fecha').valueAsDate = new Date();
@@ -747,10 +749,6 @@ function ultimoDiaMes() {
   const h = new Date(); const ult = new Date(h.getFullYear(), h.getMonth()+1, 0);
   return `${ult.getFullYear()}-${String(ult.getMonth()+1).padStart(2,'0')}-${String(ult.getDate()).padStart(2,'0')}`;
 }
-function fechaHoyLocal() {
-  const h = new Date();
-  return `${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,'0')}-${String(h.getDate()).padStart(2,'0')}`;
-}
 function initFechasConsulta() {
   document.getElementById('filtFechaDesde').value = primerDiaMes();
   document.getElementById('filtFechaHasta').value = ultimoDiaMes();
@@ -767,25 +765,41 @@ async function actualizarDesdeSupabase() {
   btn.textContent = '⏳ Cargando...';
   btn.disabled = true;
   try {
-    const centroFiltro = currentRol !== 'admin' ? `&centro=eq.${encodeURIComponent(currentCentro)}` : '';
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/confirmaciones?select=*&order=id.asc${centroFiltro}`,
-      { headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`} }
-    );
-    if (res.ok) {
-      const dataConf = await res.json();
-      if (currentRol === 'admin') {
-        datos = dataConf.map(r => mapConfirmacion(r));
-      } else {
-        datos = datos.filter(d => d.centro !== currentCentro);
-        datos = datos.concat(dataConf.map(r => mapConfirmacion(r)));
-      }
-      localStorage.setItem('confirmaciones', JSON.stringify(datos));
-      renderTabla();
-      showToast('✅ Datos actualizados correctamente.');
+    // Siempre traer todos los registros del centro (subjefe ve su centro, admin ve todo)
+    let url = `${SUPABASE_URL}/rest/v1/confirmaciones?select=*&order=id.asc`;
+    if (currentRol !== 'admin') {
+      url += `&centro=eq.${encodeURIComponent(currentCentro)}`;
     }
+
+    const res = await fetch(url, {
+      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
+    });
+
+    if (!res.ok) {
+      showToast('⚠ Error al conectar con Supabase.', '#f59e0b');
+      btn.textContent = '🔄 Actualizar';
+      btn.disabled = false;
+      return;
+    }
+
+    const dataConf = await res.json();
+
+    if (currentRol === 'admin') {
+      datos = dataConf.map(r => mapConfirmacion(r));
+    } else {
+      // Reemplazar registros del centro con los de Supabase
+      datos = datos.filter(d => d.centro !== currentCentro);
+      datos = datos.concat(dataConf.map(r => mapConfirmacion(r)));
+    }
+
+    localStorage.setItem('confirmaciones', JSON.stringify(datos));
+
+    const total = dataConf.length;
+    renderTabla();
+    showToast(`✅ ${total} registro(s) cargados desde Supabase.`);
+
   } catch(e) {
-    showToast('⚠ Error al conectar con Supabase.', '#f59e0b');
+    showToast('⚠ Error de conexión.', '#f59e0b');
   }
   btn.textContent = '🔄 Actualizar';
   btn.disabled = false;
@@ -804,8 +818,8 @@ function renderTabla() {
     if (filtResultado && r.resultado !== filtResultado) return false;
     // Usuario solo ve sus propios registros; Sub Jefe ve todos los de su centro
     if (currentRol === 'user' && r.ingresadoPor !== currentUser) return false;
-    if (desde && r.fecha && r.fecha < desde) return false;
-    if (hasta && r.fecha && r.fecha > hasta) return false;
+    if (desde && r.fecha < desde) return false;
+    if (hasta && r.fecha > hasta) return false;
     if (buscar && !JSON.stringify(r).toLowerCase().includes(buscar)) return false;
     return true;
   });
@@ -936,8 +950,8 @@ function renderReportes() {
 
   // Filtrar por fecha y rol
   let fuente = datos.filter(r => {
-    if (desde && r.fecha && r.fecha < desde) return false;
-    if (hasta && r.fecha && r.fecha > hasta) return false;
+    if (desde && r.fecha < desde) return false;
+    if (hasta && r.fecha > hasta) return false;
     return true;
   });
   if (currentRol === 'subjefe') fuente = fuente.filter(r=>r.centro===currentCentro);
