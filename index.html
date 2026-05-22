@@ -499,7 +499,7 @@ function mapConfirmacion(r) {
     id:               r.id,
     centro:           r.centro,
     ingresadoPor:     r.usuario || r.ingresadoPor || '',
-    fechaIngreso:     r.fecha_ingreso || r.fechaIngreso || '',
+    fechaIngreso:     r.fecha_ingreso || r.fechaIngreso || r.fecha_confirm || r.fecha || '',
     gestion:          r.gestion || '',
     nombre:           r.nombre || '',
     fecha:            r.fecha_confirm || r.fecha || '',
@@ -1076,7 +1076,22 @@ function exportarCSV() {
   if (currentRol === 'user')    fuente = datos.filter(r=>r.ingresadoPor===currentUser);
   if (!fuente.length) { showToast('No hay datos para exportar.','#f59e0b'); return; }
   const headers = ['Centro','Ingresado Por','Fecha Ingreso','Gestión','Nombre Cliente','Fecha Confirmación','Analista/Auxiliar','Resultado','Documento Confirmado','Producto','CAABF','Observaciones','Modificado Por','Fecha Modificación'];
-  const rows = fuente.map(r=>[r.centro,r.ingresadoPor,r.fechaIngreso,r.gestion,r.nombre,r.fecha,r.analista,r.resultado,r.documento||'',r.producto,r.caabf,(r.observaciones||'').replace(/,/g,';'),r.modificadoPor||'',r.fechaModificacion||''].map(v=>`"${v||''}"`).join(','));
+  const rows = fuente.map(r=>[
+    r.centro,
+    r.ingresadoPor,
+    r.fechaIngreso || r.fecha || '',
+    r.gestion,
+    r.nombre,
+    r.fecha,
+    r.analista,
+    r.resultado,
+    r.documento||'',
+    r.producto,
+    r.caabf,
+    (r.observaciones||'').replace(/,/g,';'),
+    r.modificadoPor||'',
+    r.fechaModificacion||''
+  ].map(v=>`"${v||''}"`).join(','));
   const csv = [headers.join(','),...rows].join('\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));
