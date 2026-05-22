@@ -165,17 +165,16 @@
     </div>
     <div class="login-sub">Sistema de Gestión · 10 Centros de Procesamiento</div>
     <div class="field-group">
-      <label>Nombre de Usuario</label>
-      <input type="text" id="loginUser" placeholder="Ej: ana.garcia">
+      <label>Correo electrónico</label>
+      <input type="text" id="loginUser" placeholder="usuario@bantrabgf.com" autocomplete="username">
     </div>
     <div class="field-group">
       <label>Contraseña</label>
-      <input type="password" id="loginPass" placeholder="••••••••">
+      <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password">
     </div>
     <button class="btn btn-primary" onclick="doLogin()">Ingresar al Sistema</button>
-    <button class="btn btn-outline" style="width:100%;justify-content:center;margin-top:10px;" onclick="recargarUsuarios()">🔄 Sincronizar Usuarios</button>
-    <div class="error-msg" id="loginError">⚠ Usuario o contraseña incorrectos.</div>
-    <div class="error-msg" id="loginSuccess" style="background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.3);color:#4ade80;">✅ Usuarios sincronizados. Ahora puedes ingresar.</div>
+    <div class="error-msg" id="loginError">⚠ Correo o contraseña incorrectos.</div>
+    <div class="error-msg" id="loginSuccess" style="background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.3);color:#4ade80;">✅ Sesión iniciada correctamente.</div>
   </div>
 </div>
 
@@ -373,8 +372,12 @@
             <input type="text" id="nu_user" placeholder="Ej: maria.lopez">
           </div>
           <div class="field-group">
-            <label>Contraseña</label>
-            <input type="password" id="nu_pass" placeholder="Mínimo 6 caracteres">
+            <label>Correo Auth</label>
+            <input type="text" id="nu_email" placeholder="usuario@bantrabgf.com">
+          </div>
+          <div class="field-group">
+            <label>Auth ID</label>
+            <input type="text" id="nu_auth_id" placeholder="UUID del usuario en Supabase Auth">
           </div>
           <div class="field-group">
             <label>Rol</label>
@@ -417,7 +420,7 @@
           </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Usuario</th><th>Rol</th><th>Centro</th><th>Creado por</th><th>Acción</th></tr></thead>
+              <thead><tr><th>Usuario</th><th>Rol</th><th>Centro</th><th>Correo</th><th>Creado por</th><th>Acción</th></tr></thead>
               <tbody id="usuariosBody"></tbody>
             </table>
           </div>
@@ -472,27 +475,33 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+// ── CONFIGURACIÓN SUPABASE ──
+// IMPORTANTE: usa la anon key nueva/regenerada de Supabase.
+// Con RLS activo, esta llave puede estar en frontend, pero NO uses service_role aquí.
+const SUPABASE_URL = 'https://lqvhzlrzbfddgssmixtw.supabase.co';
+const SUPABASE_KEY = 'TU_ANON_KEY_AQUI';
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 // ── ESTADO ──
 let currentUser    = null;
 let currentCentro  = null;
 let currentRol     = null;
+let currentAuthId   = null;
 let editandoId     = null;
 let eliminandoUser = null;
 let rolSeleccionado = 'user';
 
-let datos    = JSON.parse(localStorage.getItem('confirmaciones')    || '[]');
-let usuarios = JSON.parse(localStorage.getItem('usuarios_sistema')  || '[]');
+let datos = [];
+let usuarios = [];
 
-// Admin inicial solo si no hay nada en localStorage
-if (!usuarios.length) {
-  usuarios.push({ username:'admin', password:'admin123', rol:'admin', centro:null, creadoPor:'Sistema', fechaCreacion: new Date().toLocaleDateString('es-GT') });
-  guardarUsuarios();
+// ── HELPERS ──
+const CENTROS_LIST = ['Petapa','Zona 1','Torre 2','Coban','Mazate','Totonicapan','Monjas','Escuintla','Peten','Zacapa'];
+
+function limpiarTexto(valor) {
+  return String(valor ?? '').replace(/[<>"'`]/g, '');
 }
-
-// ── SUPABASE ──
-const SUPABASE_URL = 'https://lqvhzlrzbfddgssmixtw.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxxdmh6bHJ6YmZkZGdzc21peHR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2MDI2NDIsImV4cCI6MjA5NDE3ODY0Mn0._G331m37PuWtNvhBaghtv-uJEMToXz8pvN6ME7Ea3mY';
 
 function mapConfirmacion(r) {
   return {
@@ -514,303 +523,310 @@ function mapConfirmacion(r) {
   };
 }
 
-// Cargar usuarios Y confirmaciones desde Supabase al iniciar
-async function cargarUsuariosDesdeSupabase() {
-  try {
-    const [resUsers, resConf] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/usuarios?select=*`, {
-        headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
-      }),
-      fetch(`${SUPABASE_URL}/rest/v1/confirmaciones?select=*&order=id.asc`, {
-        headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
-      })
-    ]);
+function primerDiaMes() {
+  const h = new Date();
+  return `${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,'0')}-01`;
+}
 
-    // Cargar usuarios
-    if (resUsers.ok) {
-      const dataUsers = await resUsers.json();
-      if (dataUsers && dataUsers.length > 0) {
-        usuarios = dataUsers.map(u => ({
-          username: u.username, password: u.password, rol: u.rol,
-          centro: u.centro, creadoPor: u.creado_por, fechaCreacion: u.fecha_creacion
-        }));
-        if (!usuarios.find(u => u.username === 'admin')) {
-          usuarios.unshift({ username:'admin', password:'admin123', rol:'admin', centro:null, creadoPor:'Sistema', fechaCreacion:'' });
-        }
-        guardarUsuarios();
-      }
-    }
+function ultimoDiaMes() {
+  const h = new Date();
+  const ult = new Date(h.getFullYear(), h.getMonth()+1, 0);
+  return `${ult.getFullYear()}-${String(ult.getMonth()+1).padStart(2,'0')}-${String(ult.getDate()).padStart(2,'0')}`;
+}
 
-    // Cargar confirmaciones
-    if (resConf.ok) {
-      const dataConf = await resConf.json();
-      if (dataConf && dataConf.length > 0) {
-        datos = dataConf.map(r => mapConfirmacion(r));
-        localStorage.setItem('confirmaciones', JSON.stringify(datos));
-      }
-    }
+function initFechasConsulta() {
+  document.getElementById('filtFechaDesde').value = primerDiaMes();
+  document.getElementById('filtFechaHasta').value = ultimoDiaMes();
+}
 
-  } catch(e) {}
-  // Mostrar login solo después de cargar todo
+function initFechasReporte() {
+  document.getElementById('repFechaDesde').value = primerDiaMes();
+  document.getElementById('repFechaHasta').value = ultimoDiaMes();
+}
+
+function resetFechasReporte() {
+  initFechasReporte();
+  renderReportes();
+}
+
+function showToast(msg, bg='#22c55e') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = bg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+// ── INICIO ──
+async function iniciarSistema() {
+  const { data } = await supabaseClient.auth.getSession();
+
   document.getElementById('loadingScreen').style.display = 'none';
-  document.getElementById('loginScreen').style.display   = 'flex';
-}
-cargarUsuariosDesdeSupabase();
 
-function guardarUsuarios() { localStorage.setItem('usuarios_sistema', JSON.stringify(usuarios)); }
-
-async function supabaseInsert(reg) {
-  try {
-    await fetch(`${SUPABASE_URL}/rest/v1/confirmaciones`, {
-      method:'POST', headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'},
-      body:JSON.stringify(reg)
-    });
-  } catch(e) {}
-}
-async function supabaseUpdate(id, cambios) {
-  try {
-    await fetch(`${SUPABASE_URL}/rest/v1/confirmaciones?id=eq.${id}`, {
-      method:'PATCH', headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'},
-      body:JSON.stringify(cambios)
-    });
-  } catch(e) {}
+  if (data.session) {
+    await cargarPerfilDesdeAuth(data.session.user);
+  } else {
+    document.getElementById('loginScreen').style.display = 'flex';
+  }
 }
 
-async function supabaseInsertUsuario(u) {
-  try {
-    await fetch(`${SUPABASE_URL}/rest/v1/usuarios`, {
-      method:'POST', headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'return=minimal'},
-      body:JSON.stringify({ username:u.username, password:u.password, rol:u.rol, centro:u.centro||null, creado_por:u.creadoPor, fecha_creacion:u.fechaCreacion })
-    });
-  } catch(e) {}
-}
-async function supabaseDeleteUsuario(username) {
-  try {
-    await fetch(`${SUPABASE_URL}/rest/v1/usuarios?username=eq.${encodeURIComponent(username)}`, {
-      method:'DELETE', headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
-    });
-  } catch(e) {}
-}
-async function recargarUsuarios() {
-  const btn = document.querySelector('button[onclick="recargarUsuarios()"]');
-  btn.textContent = '⏳ Sincronizando...';
-  btn.disabled = true;
-  try {
-    const [resUsers, resConf] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/usuarios?select=*`, {
-        headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
-      }),
-      fetch(`${SUPABASE_URL}/rest/v1/confirmaciones?select=*&order=id.asc`, {
-        headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
-      })
-    ]);
+iniciarSistema();
 
-    if (resUsers.ok) {
-      const dataUsers = await resUsers.json();
-      if (dataUsers && dataUsers.length > 0) {
-        usuarios = dataUsers.map(u => ({
-          username: u.username, password: u.password, rol: u.rol,
-          centro: u.centro, creadoPor: u.creado_por, fechaCreacion: u.fecha_creacion
-        }));
-        guardarUsuarios();
-      }
+// ── LOGIN CON SUPABASE AUTH ──
+async function doLogin() {
+  const email = document.getElementById('loginUser').value.trim();
+  const pass  = document.getElementById('loginPass').value;
+  const err   = document.getElementById('loginError');
+
+  if (!email || !pass) {
+    err.textContent = '⚠ Ingresa correo y contraseña.';
+    err.style.display = 'block';
+    return;
+  }
+
+  const { data, error } = await supabaseClient.auth.signInWithPassword({
+    email,
+    password: pass
+  });
+
+  if (error || !data.user) {
+    err.textContent = '⚠ Correo o contraseña incorrectos.';
+    err.style.display = 'block';
+    return;
+  }
+
+  await cargarPerfilDesdeAuth(data.user);
+}
+
+async function cargarPerfilDesdeAuth(authUser) {
+  const err = document.getElementById('loginError');
+
+  const { data: perfil, error } = await supabaseClient
+    .from('usuarios')
+    .select('username, rol, centro, email, auth_id')
+    .eq('auth_id', authUser.id)
+    .single();
+
+  if (error || !perfil) {
+    if (err) {
+      err.textContent = '⚠ Usuario autenticado, pero no tiene perfil asignado en la tabla usuarios.';
+      err.style.display = 'block';
     }
+    await supabaseClient.auth.signOut();
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('appScreen').style.display = 'none';
+    return;
+  }
 
-    if (resConf.ok) {
-      const dataConf = await resConf.json();
-      if (dataConf && dataConf.length > 0) {
-        datos = dataConf.map(r => ({
-          id:               r.id,
-          centro:           r.centro,
-          ingresadoPor:     r.usuario,
-          fechaIngreso:     r.fecha_ingreso || '',
-          gestion:          r.gestion,
-          nombre:           r.nombre,
-          fecha:            r.fecha_confirm,
-          analista:         r.analista,
-          resultado:        r.resultado,
-          documento:        r.documento,
-          producto:         r.producto,
-          caabf:            r.caabf,
-          observaciones:    r.observaciones,
-          modificadoPor:    r.modificado_por || '',
-          fechaModificacion:r.fecha_modificacion || ''
-        }));
-        localStorage.setItem('confirmaciones', JSON.stringify(datos));
-      }
-    }
+  currentAuthId  = authUser.id;
+  currentUser    = perfil.username;
+  currentCentro  = perfil.centro;
+  currentRol     = perfil.rol;
 
-    document.getElementById('loginSuccess').style.display = 'block';
-    document.getElementById('loginError').style.display   = 'none';
-  } catch(e) {}
-  btn.textContent = '🔄 Sincronizar Usuarios';
-  btn.disabled = false;
-}
-
-function doLogin() {
-  const user = document.getElementById('loginUser').value.trim();
-  const pass = document.getElementById('loginPass').value;
-  const err  = document.getElementById('loginError');
-  const found = usuarios.find(u => u.username === user && u.password === pass);
-  if (!found) { err.style.display = 'block'; return; }
-
-  err.style.display = 'none';
-  currentUser   = found.username;
-  currentCentro = found.centro;
-  currentRol    = found.rol;
+  if (err) err.style.display = 'none';
 
   const badge = document.getElementById('topRolBadge');
-  if (found.rol === 'admin')   { badge.textContent = '🛡️ Admin';    badge.className = 'user-badge badge-admin'; }
-  else if (found.rol === 'subjefe') { badge.textContent = '👔 Sub Jefe'; badge.className = 'user-badge badge-subjefe'; }
-  else                         { badge.textContent = '👤 Usuario';   badge.className = 'user-badge badge-user'; }
+  if (currentRol === 'admin') {
+    badge.textContent = '🛡️ Admin';
+    badge.className = 'user-badge badge-admin';
+  } else if (currentRol === 'subjefe') {
+    badge.textContent = '👔 Sub Jefe';
+    badge.className = 'user-badge badge-subjefe';
+  } else {
+    badge.textContent = '👤 Usuario';
+    badge.className = 'user-badge badge-user';
+  }
 
-  document.getElementById('topCentro').textContent = found.centro ? found.centro + ' ·' : '';
-  document.getElementById('topUser').textContent   = found.username;
-  document.getElementById('tabAdmin').style.display = found.rol === 'admin' ? '' : 'none';
+  document.getElementById('topCentro').textContent = currentCentro ? currentCentro + ' ·' : '';
+  document.getElementById('topUser').textContent = currentUser;
+  document.getElementById('tabAdmin').style.display = currentRol === 'admin' ? '' : 'none';
 
   const filtCentro = document.getElementById('filtCentro');
-  if (found.rol === 'admin') {
+  if (currentRol === 'admin') {
     filtCentro.disabled = false;
   } else {
-    // subjefe y user: bloqueado a su centro
-    filtCentro.value    = found.centro;
+    filtCentro.value = currentCentro;
     filtCentro.disabled = true;
   }
 
   document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('appScreen').style.display   = 'flex';
-  document.getElementById('f_caabf').value   = found.centro || '';
-  document.getElementById('f_analista').value = found.username;
+  document.getElementById('appScreen').style.display = 'flex';
+
+  document.getElementById('f_caabf').value = currentCentro || '';
+  document.getElementById('f_analista').value = currentUser || '';
   document.getElementById('f_fecha').valueAsDate = new Date();
+
   initFechasConsulta();
   initFechasReporte();
-  // Cargar datos frescos de Supabase inmediatamente
-  setTimeout(() => actualizarDesdeSupabase(), 100);
+
+  await actualizarDesdeSupabase();
+  await cargarUsuarios();
   renderReportes();
 }
 
-document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
+document.getElementById('loginPass').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
 
-function doLogout() {
-  currentUser = currentCentro = currentRol = null;
-  document.getElementById('appScreen').style.display   = 'none';
-  document.getElementById('loginScreen').style.display = 'flex';
+async function doLogout() {
+  await supabaseClient.auth.signOut();
+
+  currentUser = null;
+  currentCentro = null;
+  currentRol = null;
+  currentAuthId = null;
+  datos = [];
+  usuarios = [];
+
   document.getElementById('loginUser').value = '';
   document.getElementById('loginPass').value = '';
+  document.getElementById('tablaBody').innerHTML = '';
+  document.getElementById('statsGrid').innerHTML = '';
+  document.getElementById('reporteBody').innerHTML = '';
+
+  document.getElementById('appScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+
   switchTab('registro');
 }
 
 // ── TABS ──
 function switchTab(name) {
   const names = ['registro','consulta','reportes','admin'];
-  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', names[i]===name));
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', names[i] === name));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.getElementById('panel-'+name).classList.add('active');
-  if (name==='reportes') renderReportes();
-  if (name==='consulta') { actualizarDesdeSupabase(); }
-  if (name==='admin')    renderUsuarios();
+  document.getElementById('panel-' + name).classList.add('active');
+
+  if (name === 'consulta') actualizarDesdeSupabase();
+  if (name === 'reportes') renderReportes();
+  if (name === 'admin') cargarUsuarios();
+}
+
+// ── SUPABASE DATOS ──
+async function actualizarDesdeSupabase() {
+  const btn = document.getElementById('btnActualizar');
+  if (btn) {
+    btn.textContent = '⏳ Cargando...';
+    btn.disabled = true;
+  }
+
+  const { data, error } = await supabaseClient
+    .from('confirmaciones')
+    .select('*')
+    .order('id', { ascending: true });
+
+  if (btn) {
+    btn.textContent = '🔄 Actualizar';
+    btn.disabled = false;
+  }
+
+  if (error) {
+    showToast('⚠ Error al cargar datos. Revisa RLS/Auth.', '#f59e0b');
+    return;
+  }
+
+  datos = (data || []).map(r => mapConfirmacion(r));
+  renderTabla();
+  renderReportes();
+}
+
+async function supabaseInsert(reg) {
+  const { error } = await supabaseClient
+    .from('confirmaciones')
+    .insert(reg);
+
+  if (error) {
+    showToast('⚠ No se pudo guardar en Supabase.', '#f59e0b');
+    return false;
+  }
+  return true;
+}
+
+async function supabaseUpdate(id, cambios) {
+  const { error } = await supabaseClient
+    .from('confirmaciones')
+    .update(cambios)
+    .eq('id', id);
+
+  if (error) {
+    showToast('⚠ No se pudo actualizar en Supabase.', '#f59e0b');
+    return false;
+  }
+  return true;
+}
+
+async function cargarUsuarios() {
+  if (currentRol !== 'admin') return;
+
+  const { data, error } = await supabaseClient
+    .from('usuarios')
+    .select('username, rol, centro, creado_por, fecha_creacion, email, auth_id')
+    .order('username', { ascending: true });
+
+  if (error) {
+    showToast('⚠ No se pudieron cargar usuarios.', '#f59e0b');
+    return;
+  }
+
+  usuarios = data || [];
+  renderUsuarios();
 }
 
 // ── GUARDAR CONFIRMACIÓN ──
 async function guardarRegistro() {
   const get = id => document.getElementById(id).value.trim();
-  if (['f_gestion','f_nombre','f_fecha','f_analista','f_resultado'].some(id=>!get(id))) {
-    showToast('⚠ Complete los campos obligatorios.','#f59e0b'); return;
+
+  if (['f_gestion','f_nombre','f_fecha','f_analista','f_resultado'].some(id => !get(id))) {
+    showToast('⚠ Complete los campos obligatorios.', '#f59e0b');
+    return;
   }
+
   const reg = {
-    id:Date.now(), centro:currentCentro, ingresadoPor:currentUser,
-    fechaIngreso:new Date().toLocaleString('es-GT'),
-    gestion:get('f_gestion'), nombre:get('f_nombre'), fecha:get('f_fecha'),
-    analista:get('f_analista'), resultado:get('f_resultado'),
-    documento:get('f_documento'), producto:get('f_producto'), caabf:currentCentro, observaciones:get('f_observaciones'),
+    centro: currentCentro,
+    usuario: currentUser,
+    gestion: limpiarTexto(get('f_gestion')),
+    nombre: limpiarTexto(get('f_nombre')),
+    fecha_confirm: get('f_fecha'),
+    analista: limpiarTexto(get('f_analista')),
+    resultado: get('f_resultado'),
+    documento: get('f_documento'),
+    producto: get('f_producto'),
+    caabf: currentCentro,
+    observaciones: limpiarTexto(get('f_observaciones')),
+    fecha_ingreso: new Date().toISOString()
   };
-  datos.push(reg);
-  localStorage.setItem('confirmaciones', JSON.stringify(datos));
-  await supabaseInsert({ centro:reg.centro, usuario:reg.ingresadoPor, gestion:reg.gestion, nombre:reg.nombre, fecha_confirm:reg.fecha, analista:reg.analista, resultado:reg.resultado, documento:reg.documento, producto:reg.producto, caabf:reg.caabf, observaciones:reg.observaciones });
+
+  const ok = await supabaseInsert(reg);
+  if (!ok) return;
+
   showToast('✅ Registro guardado correctamente.');
   limpiarForm();
   document.getElementById('f_fecha').valueAsDate = new Date();
-  document.getElementById('f_caabf').value    = currentCentro||'';
-  document.getElementById('f_analista').value = currentUser||'';
+  document.getElementById('f_caabf').value = currentCentro || '';
+  document.getElementById('f_analista').value = currentUser || '';
+
+  await actualizarDesdeSupabase();
 }
 
 function limpiarForm() {
-  ['f_gestion','f_nombre','f_fecha','f_resultado','f_documento','f_producto','f_observaciones'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('f_caabf').value    = currentCentro||'';
-  document.getElementById('f_analista').value = currentUser||'';
-}
-
-// ── HELPERS DE FECHA ──
-function primerDiaMes() {
-  const h = new Date(); return `${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,'0')}-01`;
-}
-function ultimoDiaMes() {
-  const h = new Date(); const ult = new Date(h.getFullYear(), h.getMonth()+1, 0);
-  return `${ult.getFullYear()}-${String(ult.getMonth()+1).padStart(2,'0')}-${String(ult.getDate()).padStart(2,'0')}`;
-}
-function initFechasConsulta() {
-  document.getElementById('filtFechaDesde').value = primerDiaMes();
-  document.getElementById('filtFechaHasta').value = ultimoDiaMes();
-}
-function initFechasReporte() {
-  document.getElementById('repFechaDesde').value = primerDiaMes();
-  document.getElementById('repFechaHasta').value = ultimoDiaMes();
-}
-function resetFechasReporte() { initFechasReporte(); renderReportes(); }
-
-// ── ACTUALIZAR DESDE SUPABASE ──
-async function actualizarDesdeSupabase() {
-  const btn = document.getElementById('btnActualizar');
-  btn.textContent = '⏳ Cargando...';
-  btn.disabled = true;
-  try {
-    let url = `${SUPABASE_URL}/rest/v1/confirmaciones?select=*&order=id.asc`;
-    if (currentRol !== 'admin') {
-      url += `&centro=eq.${encodeURIComponent(currentCentro)}`;
-    }
-    console.log('URL:', url);
-    console.log('KEY:', SUPABASE_KEY.slice(0,20)+'...');
-    const res = await fetch(url, {
-      headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
-    });
-    console.log('Status:', res.status);
-    if (!res.ok) {
-      showToast('⚠ Error al conectar con Supabase.', '#f59e0b');
-      btn.textContent = '🔄 Actualizar';
-      btn.disabled = false;
-      return;
-    }
-    const dataConf = await res.json();
-    console.log('Registros:', dataConf.length, dataConf);
-    if (currentRol === 'admin') {
-      datos = dataConf.map(r => mapConfirmacion(r));
-    } else {
-      datos = datos.filter(d => d.centro !== currentCentro);
-      datos = datos.concat(dataConf.map(r => mapConfirmacion(r)));
-    }
-    localStorage.setItem('confirmaciones', JSON.stringify(datos));
-    renderTabla();
-    showToast(`✅ ${dataConf.length} registro(s) cargados.`);
-  } catch(e) {
-    console.log('Error:', e);
-    showToast('⚠ Error de conexión.', '#f59e0b');
-  }
-  btn.textContent = '🔄 Actualizar';
-  btn.disabled = false;
+  ['f_gestion','f_nombre','f_fecha','f_resultado','f_documento','f_producto','f_observaciones'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('f_caabf').value = currentCentro || '';
+  document.getElementById('f_analista').value = currentUser || '';
 }
 
 // ── TABLA ──
 function renderTabla() {
-  const filtCentro    = currentRol==='admin' ? document.getElementById('filtCentro').value : currentCentro;
+  const filtCentro    = currentRol === 'admin' ? document.getElementById('filtCentro').value : currentCentro;
   const filtResultado = document.getElementById('filtResultado').value;
   const buscar        = document.getElementById('filtBuscar').value.toLowerCase();
   const desde         = document.getElementById('filtFechaDesde').value;
   const hasta         = document.getElementById('filtFechaHasta').value;
 
   const filtered = datos.filter(r => {
-    if (filtCentro    && r.centro    !== filtCentro)    return false;
+    if (filtCentro && r.centro !== filtCentro) return false;
     if (filtResultado && r.resultado !== filtResultado) return false;
-    // Usuario solo ve sus propios registros; Sub Jefe ve todos los de su centro
     if (currentRol === 'user' && r.ingresadoPor !== currentUser) return false;
     if (desde && r.fecha < desde) return false;
     if (hasta && r.fecha > hasta) return false;
@@ -820,87 +836,111 @@ function renderTabla() {
 
   const tbody = document.getElementById('tablaBody');
   const empty = document.getElementById('emptyState');
-  if (!filtered.length) { tbody.innerHTML=''; empty.style.display='block'; return; }
+
+  if (!filtered.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+
   empty.style.display = 'none';
 
   tbody.innerHTML = filtered.map((r,i) => {
     const esPendiente = r.resultado === 'Pendiente' || r.resultado === 'En revisión';
     const accionBtn = esPendiente
-      ? `<button class="edit-btn" onclick="abrirModal(${r.id})">✏️ Actualizar</button>`
+      ? `<button class="edit-btn" onclick="abrirModal(${Number(r.id)})">✏️ Actualizar</button>`
       : `<span style="color:var(--text3);font-size:12px;">—</span>`;
+
     return `<tr>
       <td style="color:var(--text3)">${i+1}</td>
-      <td><span style="font-weight:600;color:var(--accent)">${r.centro}</span></td>
-      <td>${r.gestion}</td><td>${r.nombre}</td><td>${r.fecha}</td>
-      <td>${r.analista}</td><td>${badgeResultado(r.resultado)}</td>
-      <td>${r.documento||'—'}</td><td>${r.producto||'—'}</td><td>${r.caabf||'—'}</td>
-      <td style="color:var(--text2)">${r.ingresadoPor} <span style="color:var(--text3);font-size:11px">(${r.centro})</span></td>
-      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;color:var(--text2)">${r.observaciones||'—'}</td>
-      <td>${accionBtn}</td></tr>`;
+      <td><span style="font-weight:600;color:var(--accent)">${limpiarTexto(r.centro)}</span></td>
+      <td>${limpiarTexto(r.gestion)}</td>
+      <td>${limpiarTexto(r.nombre)}</td>
+      <td>${limpiarTexto(r.fecha)}</td>
+      <td>${limpiarTexto(r.analista)}</td>
+      <td>${badgeResultado(r.resultado)}</td>
+      <td>${limpiarTexto(r.documento || '—')}</td>
+      <td>${limpiarTexto(r.producto || '—')}</td>
+      <td>${limpiarTexto(r.caabf || '—')}</td>
+      <td style="color:var(--text2)">${limpiarTexto(r.ingresadoPor)} <span style="color:var(--text3);font-size:11px">(${limpiarTexto(r.centro)})</span></td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;color:var(--text2)">${limpiarTexto(r.observaciones || '—')}</td>
+      <td>${accionBtn}</td>
+    </tr>`;
   }).join('');
 }
 
 function badgeResultado(v) {
   if (!v) return '—';
   const map = {'Aprobado':'badge-yes','Rechazado':'badge-no','En revisión':'badge-pend','Pendiente':'badge-pend'};
-  return `<span class="badge ${map[v]||''}">${v}</span>`;
+  return `<span class="badge ${map[v] || ''}">${limpiarTexto(v)}</span>`;
 }
 
 // ── MODAL EDITAR ──
 function abrirModal(id) {
-  const reg = datos.find(r => r.id===id);
+  const reg = datos.find(r => Number(r.id) === Number(id));
   if (!reg) return;
+
   editandoId = id;
+
   document.getElementById('modalInfo').innerHTML = `
-    <div class="modal-info-row"><span class="modal-info-label">Gestión</span><span>${reg.gestion}</span></div>
-    <div class="modal-info-row"><span class="modal-info-label">Cliente</span><span>${reg.nombre}</span></div>
-    <div class="modal-info-row"><span class="modal-info-label">Centro</span><span style="color:var(--accent);font-weight:600">${reg.centro}</span></div>
-    <div class="modal-info-row"><span class="modal-info-label">Ingresado por</span><span>${reg.ingresadoPor}</span></div>`;
-  document.getElementById('edit_resultado').value     = reg.resultado    || 'Pendiente';
+    <div class="modal-info-row"><span class="modal-info-label">Gestión</span><span>${limpiarTexto(reg.gestion)}</span></div>
+    <div class="modal-info-row"><span class="modal-info-label">Cliente</span><span>${limpiarTexto(reg.nombre)}</span></div>
+    <div class="modal-info-row"><span class="modal-info-label">Centro</span><span style="color:var(--accent);font-weight:600">${limpiarTexto(reg.centro)}</span></div>
+    <div class="modal-info-row"><span class="modal-info-label">Ingresado por</span><span>${limpiarTexto(reg.ingresadoPor)}</span></div>`;
+
+  document.getElementById('edit_resultado').value = reg.resultado || 'Pendiente';
   document.getElementById('edit_observaciones').value = reg.observaciones || '';
   document.getElementById('modalOverlay').classList.add('open');
 }
+
 function cerrarModal(e) {
-  if (e && e.target!==document.getElementById('modalOverlay')) return;
+  if (e && e.target !== document.getElementById('modalOverlay')) return;
   document.getElementById('modalOverlay').classList.remove('open');
   editandoId = null;
 }
+
 async function guardarEdicion() {
   if (!editandoId) return;
+
   const nuevoResultado = document.getElementById('edit_resultado').value;
-  const nuevasObs      = document.getElementById('edit_observaciones').value.trim();
-  const idx = datos.findIndex(r => r.id===editandoId);
-  if (idx===-1) return;
-  datos[idx].resultado         = nuevoResultado;
-  datos[idx].observaciones     = nuevasObs;
-  datos[idx].modificadoPor     = currentUser;
-  datos[idx].fechaModificacion = new Date().toLocaleString('es-GT');
-  localStorage.setItem('confirmaciones', JSON.stringify(datos));
-  await supabaseUpdate(editandoId, {resultado:nuevoResultado, observaciones:nuevasObs});
+  const nuevasObs = limpiarTexto(document.getElementById('edit_observaciones').value.trim());
+
+  const ok = await supabaseUpdate(editandoId, {
+    resultado: nuevoResultado,
+    observaciones: nuevasObs,
+    modificado_por: currentUser,
+    fecha_modificacion: new Date().toISOString()
+  });
+
+  if (!ok) return;
+
   document.getElementById('modalOverlay').classList.remove('open');
   editandoId = null;
-  renderTabla();
+
+  await actualizarDesdeSupabase();
   showToast('✅ Registro actualizado correctamente.');
 }
 
 // ── METAS POR CENTRO ──
-const CENTROS_LIST = ['Petapa','Zona 1','Torre 2','Coban','Mazate','Totonicapan','Monjas','Escuintla','Peten','Zacapa'];
-
-// Cargar metas guardadas o defaults
 let metasCentro = JSON.parse(localStorage.getItem('metasCentro') || 'null') ||
   Object.fromEntries(CENTROS_LIST.map(c => [c, { gestiones: 100, objetivo: 20 }]));
 
-function guardarMetas() { localStorage.setItem('metasCentro', JSON.stringify(metasCentro)); }
+function guardarMetas() {
+  localStorage.setItem('metasCentro', JSON.stringify(metasCentro));
+}
 
 function renderMetasCentro() {
   const esAdmin   = currentRol === 'admin';
   const esSubjefe = currentRol === 'subjefe';
   const lockMsg = document.getElementById('metasLockMsg');
-  if (lockMsg) lockMsg.textContent = esAdmin
-    ? '✏️ Puedes editar gestiones y % objetivo'
-    : esSubjefe
-    ? '✏️ Puedes editar las gestiones de tu centro · El % objetivo solo lo cambia el Admin'
-    : '🔒 Solo visualización';
+
+  if (lockMsg) {
+    lockMsg.textContent = esAdmin
+      ? '✏️ Puedes editar gestiones y % objetivo'
+      : esSubjefe
+        ? '✏️ Puedes editar las gestiones de tu centro · El % objetivo solo lo cambia el Admin'
+        : '🔒 Solo visualización';
+  }
 
   const centros = esAdmin ? CENTROS_LIST : [currentCentro];
   document.getElementById('metasCentroCard').style.display = '';
@@ -910,15 +950,16 @@ function renderMetasCentro() {
     const metaConf = Math.round(m.gestiones * m.objetivo / 100);
     const disabledGest = esAdmin || esSubjefe ? '' : 'disabled style="opacity:.5;cursor:not-allowed;"';
     const disabledObj  = esAdmin ? '' : 'disabled style="opacity:.5;cursor:not-allowed;"';
+
     return `<tr>
-      <td style="font-weight:600;color:var(--accent)">${c}</td>
-      <td><input type="number" value="${m.gestiones}" min="1" ${disabledGest}
+      <td style="font-weight:600;color:var(--accent)">${limpiarTexto(c)}</td>
+      <td><input type="number" value="${Number(m.gestiones)}" min="1" ${disabledGest}
         style="width:90px;padding:6px 10px;font-size:13px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);"
-        onchange="actualizarMeta('${c}','gestiones',this.value)"></td>
+        onchange="actualizarMeta('${limpiarTexto(c)}','gestiones',this.value)"></td>
       <td><div style="display:flex;align-items:center;gap:6px;">
-        <input type="number" value="${m.objetivo}" min="1" max="100" ${disabledObj}
+        <input type="number" value="${Number(m.objetivo)}" min="1" max="100" ${disabledObj}
           style="width:70px;padding:6px 10px;font-size:13px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);"
-          onchange="actualizarMeta('${c}','objetivo',this.value)">
+          onchange="actualizarMeta('${limpiarTexto(c)}','objetivo',this.value)">
         <span style="color:var(--text2)">%</span>
       </div></td>
       <td><span style="background:rgba(124,92,252,.15);color:#a78bfa;padding:4px 12px;border-radius:8px;font-weight:700;font-size:13px;">${metaConf}</span></td>
@@ -927,119 +968,156 @@ function renderMetasCentro() {
 }
 
 function actualizarMeta(centro, campo, valor) {
-  // Admin puede cambiar todo; subjefe solo gestiones
   if (currentRol !== 'admin' && !(currentRol === 'subjefe' && campo === 'gestiones')) return;
+
   if (!metasCentro[centro]) metasCentro[centro] = { gestiones:100, objetivo:20 };
   metasCentro[centro][campo] = parseInt(valor) || 0;
+
   guardarMetas();
   renderReportes();
 }
 
 // ── REPORTES ──
 function renderReportes() {
+  if (!document.getElementById('statsGrid')) return;
+
   const desde = document.getElementById('repFechaDesde')?.value || '';
   const hasta = document.getElementById('repFechaHasta')?.value || '';
 
   renderMetasCentro();
 
-  // Filtrar por fecha y rol
   let fuente = datos.filter(r => {
     if (desde && r.fecha < desde) return false;
     if (hasta && r.fecha > hasta) return false;
     return true;
   });
-  if (currentRol === 'subjefe') fuente = fuente.filter(r=>r.centro===currentCentro);
-  if (currentRol === 'user')    fuente = fuente.filter(r=>r.ingresadoPor===currentUser);
 
-  const total   = fuente.length;
-  const apr     = fuente.filter(r=>r.resultado==='Aprobado').length;
-  const rec     = fuente.filter(r=>r.resultado==='Rechazado').length;
-  const pend    = fuente.filter(r=>r.resultado==='Pendiente').length;
-  const conf    = apr + rec;
-  const subLabel = currentRol==='admin' ? 'todos los centros' : currentRol==='subjefe' ? currentCentro : currentUser;
+  if (currentRol === 'subjefe') fuente = fuente.filter(r => r.centro === currentCentro);
+  if (currentRol === 'user') fuente = fuente.filter(r => r.ingresadoPor === currentUser);
+
+  const total = fuente.length;
+  const apr   = fuente.filter(r => r.resultado === 'Aprobado').length;
+  const rec   = fuente.filter(r => r.resultado === 'Rechazado').length;
+  const pend  = fuente.filter(r => r.resultado === 'Pendiente').length;
+  const conf  = apr + rec;
+
+  const subLabel = currentRol === 'admin' ? 'todos los centros' : currentRol === 'subjefe' ? currentCentro : currentUser;
 
   document.getElementById('statsGrid').innerHTML = `
-    <div class="stat-card"><div class="stat-label">Total Registros</div><div class="stat-value">${total}</div><div class="stat-sub">${subLabel}</div></div>
+    <div class="stat-card"><div class="stat-label">Total Registros</div><div class="stat-value">${total}</div><div class="stat-sub">${limpiarTexto(subLabel)}</div></div>
     <div class="stat-card"><div class="stat-label">Confirmados</div><div class="stat-value" style="color:#4ade80">${conf}</div><div class="stat-sub">Aprobados + Rechazados</div></div>
     <div class="stat-card"><div class="stat-label">Aprobados</div><div class="stat-value" style="color:#4ade80">${apr}</div><div class="stat-sub">&nbsp;</div></div>
     <div class="stat-card"><div class="stat-label">Rechazados</div><div class="stat-value" style="color:#f87171">${rec}</div><div class="stat-sub">&nbsp;</div></div>
     <div class="stat-card"><div class="stat-label">Pendientes</div><div class="stat-value" style="color:#fbbf24">${pend}</div><div class="stat-sub">requieren acción</div></div>`;
 
-  const centros = currentRol==='admin' ? CENTROS_LIST : [currentCentro];
+  const centros = currentRol === 'admin' ? CENTROS_LIST : [currentCentro];
 
   document.getElementById('reporteBody').innerHTML = centros.map(c => {
-    const regs = fuente.filter(r=>r.centro===c);
-    const a    = regs.filter(r=>r.resultado==='Aprobado').length;
-    const rc   = regs.filter(r=>r.resultado==='Rechazado').length;
-    const p    = regs.filter(r=>r.resultado==='Pendiente').length;
+    const regs = fuente.filter(r => r.centro === c);
+    const a    = regs.filter(r => r.resultado === 'Aprobado').length;
+    const rc   = regs.filter(r => r.resultado === 'Rechazado').length;
+    const p    = regs.filter(r => r.resultado === 'Pendiente').length;
     const cf   = a + rc;
     const m    = metasCentro[c] || { gestiones:100, objetivo:20 };
     const metaConf = Math.round(m.gestiones * m.objetivo / 100);
     const avance   = metaConf ? Math.round(cf / metaConf * 100) : 0;
     const col      = avance >= 100 ? '#4ade80' : avance >= 50 ? '#fbbf24' : '#f87171';
+
     return `<tr>
-      <td style="font-weight:600;color:var(--accent)">${c}</td>
+      <td style="font-weight:600;color:var(--accent)">${limpiarTexto(c)}</td>
       <td>${regs.length}</td>
       <td><span class="badge badge-yes">${cf}</span></td>
       <td><span class="badge badge-yes">${a}</span></td>
       <td><span class="badge badge-no">${rc}</span></td>
       <td><span class="badge badge-pend">${p}</span></td>
-      <td style="color:var(--text2)">${metaConf} <span style="color:var(--text3);font-size:11px">(${m.objetivo}% de ${m.gestiones})</span></td>
-      <td><span style="font-weight:700;color:${col}">${avance}%</span></td></tr>`;
+      <td style="color:var(--text2)">${metaConf} <span style="color:var(--text3);font-size:11px">(${Number(m.objetivo)}% de ${Number(m.gestiones)})</span></td>
+      <td><span style="font-weight:700;color:${col}">${avance}%</span></td>
+    </tr>`;
   }).join('');
 }
 
 // ── ADMIN: USUARIOS ──
 function selectRole(rol) {
   rolSeleccionado = rol;
-  document.getElementById('roleOptAdmin').classList.toggle('selected',   rol==='admin');
-  document.getElementById('roleOptSubjefe').classList.toggle('selected', rol==='subjefe');
-  document.getElementById('roleOptUser').classList.toggle('selected',    rol==='user');
-  // Admin no necesita centro; subjefe y user sí
-  document.getElementById('centroField').style.display = rol==='admin' ? 'none' : '';
+
+  document.getElementById('roleOptAdmin').classList.toggle('selected', rol === 'admin');
+  document.getElementById('roleOptSubjefe').classList.toggle('selected', rol === 'subjefe');
+  document.getElementById('roleOptUser').classList.toggle('selected', rol === 'user');
+
+  document.getElementById('centroField').style.display = rol === 'admin' ? 'none' : '';
 }
 
-function crearUsuario() {
+async function crearUsuario() {
+  if (currentRol !== 'admin') {
+    showToast('⚠ Solo admin puede crear perfiles.', '#f59e0b');
+    return;
+  }
+
   const user   = document.getElementById('nu_user').value.trim().toLowerCase();
-  const pass   = document.getElementById('nu_pass').value;
+  const email  = document.getElementById('nu_email').value.trim().toLowerCase();
+  const authId = document.getElementById('nu_auth_id').value.trim();
   const centro = document.getElementById('nu_centro').value;
 
-  if (!user || !pass)                              { showToast('⚠ Completa usuario y contraseña.','#f59e0b'); return; }
-  if (pass.length < 6)                             { showToast('⚠ Contraseña mínimo 6 caracteres.','#f59e0b'); return; }
-  if (rolSeleccionado!=='admin' && !centro) { showToast('⚠ Selecciona el centro.','#f59e0b'); return; }
-  if (usuarios.find(u => u.username===user))       { showToast('⚠ Ese nombre de usuario ya existe.','#f59e0b'); return; }
+  if (!user || !email || !authId) {
+    showToast('⚠ Completa usuario, correo y Auth ID.', '#f59e0b');
+    return;
+  }
 
-  const nuevoUsuario = {
-    username: user, password: pass, rol: rolSeleccionado,
-    centro: rolSeleccionado==='admin' ? null : centro,
-    creadoPor: currentUser, fechaCreacion: new Date().toLocaleDateString('es-GT')
+  if (rolSeleccionado !== 'admin' && !centro) {
+    showToast('⚠ Selecciona el centro.', '#f59e0b');
+    return;
+  }
+
+  const nuevoPerfil = {
+    username: user,
+    email,
+    auth_id: authId,
+    rol: rolSeleccionado,
+    centro: rolSeleccionado === 'admin' ? null : centro,
+    creado_por: currentUser,
+    fecha_creacion: new Date().toISOString()
   };
-  usuarios.push(nuevoUsuario);
-  guardarUsuarios();
-  supabaseInsertUsuario(nuevoUsuario);
+
+  const { error } = await supabaseClient
+    .from('usuarios')
+    .insert(nuevoPerfil);
+
+  if (error) {
+    showToast('⚠ No se pudo crear el perfil. Verifica Auth ID/RLS.', '#f59e0b');
+    return;
+  }
 
   document.getElementById('nu_user').value = '';
-  document.getElementById('nu_pass').value = '';
+  document.getElementById('nu_email').value = '';
+  document.getElementById('nu_auth_id').value = '';
   document.getElementById('nu_centro').value = '';
+
   selectRole('user');
-  renderUsuarios();
-  showToast(`✅ Usuario "${user}" creado correctamente.`);
+  await cargarUsuarios();
+  showToast(`✅ Perfil "${user}" creado correctamente.`);
 }
 
 function renderUsuarios() {
-  document.getElementById('conteoUsuarios').textContent = `${usuarios.length} usuario${usuarios.length!==1?'s':''}`;
+  if (currentRol !== 'admin') return;
+
+  document.getElementById('conteoUsuarios').textContent = `${usuarios.length} usuario${usuarios.length !== 1 ? 's' : ''}`;
+
   document.getElementById('usuariosBody').innerHTML = usuarios.map(u => {
-    const rolLabel = u.rol==='admin' ? 'Admin' : u.rol==='subjefe' ? 'Sub Jefe' : 'Usuario';
-    const rolClass = u.rol==='admin' ? 'badge-role-admin' : u.rol==='subjefe' ? 'badge-role-subjefe' : 'badge-role-user';
-    const deleteBtn = u.creadoPor !== 'Sistema'
-      ? `<button class="btn btn-danger btn-sm" onclick="pedirEliminar('${u.username}')">🗑️ Eliminar</button>`
+    const rolLabel = u.rol === 'admin' ? 'Admin' : u.rol === 'subjefe' ? 'Sub Jefe' : 'Usuario';
+    const rolClass = u.rol === 'admin' ? 'badge-role-admin' : u.rol === 'subjefe' ? 'badge-role-subjefe' : 'badge-role-user';
+
+    const deleteBtn = u.username !== currentUser
+      ? `<button class="btn btn-danger btn-sm" onclick="pedirEliminar('${limpiarTexto(u.username)}')">🗑️ Eliminar</button>`
       : `<span style="color:var(--text3);font-size:12px;">—</span>`;
+
     return `<tr>
-      <td style="font-weight:600">${u.username}</td>
+      <td style="font-weight:600">${limpiarTexto(u.username)}</td>
       <td><span class="badge ${rolClass}">${rolLabel}</span></td>
-      <td>${u.centro||'<span style="color:var(--text3)">Todos los centros</span>'}</td>
-      <td style="color:var(--text2);font-size:12px">${u.creadoPor}</td>
-      <td>${deleteBtn}</td></tr>`;
+      <td>${u.centro ? limpiarTexto(u.centro) : '<span style="color:var(--text3)">Todos los centros</span>'}</td>
+      <td style="color:var(--text2);font-size:12px">${limpiarTexto(u.email || '—')}</td>
+      <td style="color:var(--text2);font-size:12px">${limpiarTexto(u.creado_por || '—')}</td>
+      <td>${deleteBtn}</td>
+    </tr>`;
   }).join('');
 }
 
@@ -1048,35 +1126,57 @@ function pedirEliminar(username) {
   document.getElementById('eliminarNombre').textContent = username;
   document.getElementById('modalEliminar').classList.add('open');
 }
+
 function cerrarModalEliminar(e) {
-  if (e && e.target!==document.getElementById('modalEliminar')) return;
+  if (e && e.target !== document.getElementById('modalEliminar')) return;
   document.getElementById('modalEliminar').classList.remove('open');
   eliminandoUser = null;
 }
-function confirmarEliminar() {
+
+async function confirmarEliminar() {
   if (!eliminandoUser) return;
-  const esAdmin = usuarios.find(u=>u.username===eliminandoUser)?.rol==='admin';
-  const otrosAdmins = usuarios.filter(u=>u.rol==='admin'&&u.username!==eliminandoUser);
-  if (esAdmin && otrosAdmins.length===0) {
+
+  if (eliminandoUser === currentUser) {
     cerrarModalEliminar();
-    showToast('⚠ No puedes eliminar el único administrador.','#f59e0b'); return;
+    showToast('⚠ No puedes eliminar tu propio perfil.', '#f59e0b');
+    return;
   }
-  usuarios = usuarios.filter(u=>u.username!==eliminandoUser);
-  guardarUsuarios();
-  supabaseDeleteUsuario(eliminandoUser);
+
+  const { error } = await supabaseClient
+    .from('usuarios')
+    .delete()
+    .eq('username', eliminandoUser);
+
+  if (error) {
+    showToast('⚠ No se pudo eliminar el perfil.', '#f59e0b');
+    return;
+  }
+
   cerrarModalEliminar();
-  renderUsuarios();
-  showToast('🗑️ Usuario eliminado.');
+  await cargarUsuarios();
+  showToast('🗑️ Perfil eliminado.');
 }
 
 // ── CSV ──
 function exportarCSV() {
+  if (currentRol === 'user') {
+    showToast('⚠ Usuario no puede exportar.', '#f59e0b');
+    return;
+  }
+
   let fuente = datos;
-  if (currentRol === 'subjefe') fuente = datos.filter(r=>r.centro===currentCentro);
-  if (currentRol === 'user')    fuente = datos.filter(r=>r.ingresadoPor===currentUser);
-  if (!fuente.length) { showToast('No hay datos para exportar.','#f59e0b'); return; }
+
+  if (currentRol === 'subjefe') fuente = datos.filter(r => r.centro === currentCentro);
+  if (currentRol === 'admin') fuente = datos;
+
+  if (!fuente.length) {
+    showToast('No hay datos para exportar.', '#f59e0b');
+    return;
+  }
+
   const headers = ['Centro','Ingresado Por','Fecha Ingreso','Gestión','Nombre Cliente','Fecha Confirmación','Analista/Auxiliar','Resultado','Documento Confirmado','Producto','CAABF','Observaciones','Modificado Por','Fecha Modificación'];
-  const rows = fuente.map(r=>[
+
+  const rows = fuente.map(r => [
     r.centro,
     r.ingresadoPor,
     r.fechaIngreso || r.fecha || '',
@@ -1085,34 +1185,30 @@ function exportarCSV() {
     r.fecha,
     r.analista,
     r.resultado,
-    r.documento||'',
+    r.documento || '',
     r.producto,
     r.caabf,
-    (r.observaciones||'').replace(/,/g,';'),
-    r.modificadoPor||'',
-    r.fechaModificacion||''
-  ].map(v=>`"${v||''}"`).join(','));
-  const csv = [headers.join(','),...rows].join('\n');
+    (r.observaciones || '').replace(/,/g,';'),
+    r.modificadoPor || '',
+    r.fechaModificacion || ''
+  ].map(v => `"${String(v || '').replace(/"/g, '""')}"`).join(','));
+
+  const csv = [headers.join(','), ...rows].join('\n');
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));
+  a.href = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type:'text/csv;charset=utf-8;' }));
   a.download = `confirmaciones_${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
+
   showToast('📥 Archivo CSV descargado.');
 }
 
-// ── TOAST ──
-function showToast(msg, bg='#22c55e') {
-  const t = document.getElementById('toast');
-  t.textContent=msg; t.style.background=bg;
-  t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), 3200);
-}
-
+// ── EVENTOS ──
 document.addEventListener('keydown', e => {
-  if (e.key==='Escape') {
+  if (e.key === 'Escape') {
     document.getElementById('modalOverlay').classList.remove('open');
     document.getElementById('modalEliminar').classList.remove('open');
-    editandoId = eliminandoUser = null;
+    editandoId = null;
+    eliminandoUser = null;
   }
 });
 
