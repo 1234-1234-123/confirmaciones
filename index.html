@@ -498,19 +498,19 @@ function mapConfirmacion(r) {
   return {
     id:               r.id,
     centro:           r.centro,
-    ingresadoPor:     r.usuario,
-    fechaIngreso:     r.fecha_ingreso || '',
-    gestion:          r.gestion,
-    nombre:           r.nombre,
-    fecha:            r.fecha_confirm,
-    analista:         r.analista,
-    resultado:        r.resultado,
-    documento:        r.documento,
-    producto:         r.producto,
-    caabf:            r.caabf,
-    observaciones:    r.observaciones,
-    modificadoPor:    r.modificado_por || '',
-    fechaModificacion:r.fecha_modificacion || ''
+    ingresadoPor:     r.usuario || r.ingresadoPor || '',
+    fechaIngreso:     r.fecha_ingreso || r.fechaIngreso || '',
+    gestion:          r.gestion || '',
+    nombre:           r.nombre || '',
+    fecha:            r.fecha_confirm || r.fecha || '',
+    analista:         r.analista || '',
+    resultado:        r.resultado || '',
+    documento:        r.documento || '',
+    producto:         r.producto || '',
+    caabf:            r.caabf || '',
+    observaciones:    r.observaciones || '',
+    modificadoPor:    r.modificado_por || r.modificadoPor || '',
+    fechaModificacion:r.fecha_modificacion || r.fechaModificacion || ''
   };
 }
 
