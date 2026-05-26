@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema de Confirmaciones</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,600;0,700;1,300&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f7f8fc; --surface:#ffffff; --surface2:#f1f4fa; --border:#e4e8f0;
+    --accent:#2563eb; --accent2:#7c3aed; --accent3:#059669;
+    --danger:#dc2626; --warning:#d97706;
+    --text:#0f172a; --text2:#475569; --text3:#94a3b8;
+    --shadow:0 1px 4px rgba(15,23,42,0.06),0 4px 16px rgba(15,23,42,0.06);
+    --shadow-lg:0 8px 32px rgba(15,23,42,0.12);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+
+  /* LOADING */
+  #loadingScreen {
+    position:fixed; inset:0; background:#fff; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; z-index:9999;
+  }
+  .loader-logo { font-family:'Fraunces',serif; font-size:32px; color:var(--accent); margin-bottom:8px; }
+  .loader-sub { font-size:13px; color:var(--text3); margin-bottom:28px; }
+  .spinner { width:36px; height:36px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .7s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* LOGIN */
+  #loginScreen {
+    display:none; min-height:100vh; align-items:center; justify-content:center;
+    background:linear-gradient(135deg,#f0f4ff 0%,#faf5ff 50%,#fff7ed 100%);
+  }
+  .login-wrap { display:flex; gap:0; border-radius:24px; overflow:hidden; box-shadow:var(--shadow-lg); width:860px; max-width:96vw; }
+  .login-side {
+    width:320px; min-height:520px;
+    background:linear-gradient(160deg,#0f172a 0%,#1e3a8a 60%,#1d4ed8 100%);
+    padding:48px 36px; display:flex; flex-direction:column; justify-content:space-between;
+    position:relative; overflow:hidden; flex-shrink:0;
+  }
+  .login-side::before { content:''; position:absolute; width:300px; height:300px; border-radius:50%; background:rgba(255,255,255,0.06); top:-80px; right:-80px; }
+  .login-side::after  { content:''; position:absolute; width:200px; height:200px; border-radius:50%; background:rgba(255,255,255,0.04); bottom:-60px; left:-60px; }
+  .login-side-logo { font-family:'Fraunces',serif; font-size:26px; color:#fff; position:relative; z-index:1; }
+  .login-side-bottom { position:relative; z-index:1; }
+  .login-side-quote  { font-family:'Fraunces',serif; font-style:italic; font-size:18px; color:rgba(255,255,255,0.85); line-height:1.5; }
+  .login-side-author { font-size:12px; color:rgba(255,255,255,0.45); margin-top:8px; }
+  .login-form { flex:1; background:#fff; padding:48px 40px; display:flex; flex-direction:column; justify-content:center; }
+  .login-form h2 { font-family:'Fraunces',serif; font-size:28px; color:var(--text); margin-bottom:6px; }
+  .login-form p { font-size:13px; color:var(--text3); margin-bottom:32px; }
+
+  .field-group { margin-bottom:18px; }
+  label { display:block; font-size:11px; font-weight:600; color:var(--text2); letter-spacing:.08em; text-transform:uppercase; margin-bottom:7px; }
+  input[type="text"],input[type="password"],input[type="email"],input[type="date"],input[type="number"],select,textarea {
+    width:100%; background:var(--surface2); border:1.5px solid var(--border); border-radius:10px;
+    color:var(--text); font-family:'DM Sans',sans-serif; font-size:14px; padding:11px 14px;
+    outline:none; transition:border-color .2s,box-shadow .2s;
+  }
+  input:focus,select:focus,textarea:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(37,99,235,0.1); background:#fff; }
+  select option { background:#fff; }
+
+  .btn { display:inline-flex; align-items:center; gap:8px; padding:11px 22px; border-radius:10px; border:none; font-family:'DM Sans',sans-serif; font-size:14px; font-weight:600; cursor:pointer; transition:all .2s; }
+  .btn-primary { background:var(--accent); color:#fff; width:100%; justify-content:center; padding:13px; font-size:15px; }
+  .btn-primary:hover { background:#1d4ed8; transform:translateY(-1px); box-shadow:0 4px 12px rgba(37,99,235,0.3); }
+  .btn-sm { padding:7px 16px; font-size:12px; border-radius:8px; }
+  .btn-success { background:var(--accent3); color:#fff; } .btn-success:hover { background:#047857; }
+  .btn-danger  { background:var(--danger);  color:#fff; } .btn-danger:hover  { background:#b91c1c; }
+  .btn-warning { background:var(--warning); color:#fff; }
+  .btn-outline { background:transparent; border:1.5px solid var(--border); color:var(--text2); }
+  .btn-outline:hover { border-color:var(--accent); color:var(--accent); }
+  .btn-ghost { background:var(--surface2); color:var(--text2); border:none; }
+  .btn-ghost:hover { background:var(--border); }
+  .btn-accent { background:var(--accent); color:#fff; }
+
+  .error-msg { background:#fef2f2; border:1px solid #fecaca; border-radius:8px; color:#dc2626; font-size:13px; padding:10px 14px; margin-top:12px; display:none; }
+
+  /* APP */
+  #appScreen { display:none; min-height:100vh; flex-direction:column; }
+  .topbar { display:flex; align-items:center; justify-content:space-between; padding:0 28px; height:64px; background:#fff; border-bottom:1px solid var(--border); position:sticky; top:0; z-index:100; box-shadow:0 1px 4px rgba(15,23,42,0.06); }
+  .topbar-brand { font-family:'Fraunces',serif; font-size:20px; color:var(--accent); display:flex; align-items:center; gap:8px; }
+  .topbar-user  { display:flex; align-items:center; gap:10px; font-size:13px; }
+  .user-badge   { font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px; letter-spacing:.04em; }
+  .badge-admin   { background:#ede9fe; color:#5b21b6; }
+  .badge-subjefe { background:#fff7ed; color:#c2410c; }
+  .badge-user    { background:#f0fdf4; color:#166534; }
+
+  .tabs { display:flex; gap:2px; padding:0 28px; background:#fff; border-bottom:1px solid var(--border); }
+  .tab { padding:14px 18px; font-size:13px; font-weight:500; color:var(--text3); cursor:pointer; border-bottom:2.5px solid transparent; transition:all .18s; }
+  .tab.active { color:var(--accent); border-bottom-color:var(--accent); font-weight:600; }
+  .tab:hover:not(.active) { color:var(--text2); }
+
+  .content { padding:28px; flex:1; max-width:1400px; margin:0 auto; width:100%; }
+  .panel { display:none; } .panel.active { display:block; }
+
+  .page-header { margin-bottom:24px; }
+  .page-header h1 { font-family:'Fraunces',serif; font-size:26px; color:var(--text); margin-bottom:4px; }
+  .page-header p { font-size:13px; color:var(--text3); }
+
+  .stats-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:16px; margin-bottom:24px; }
+  .stat-card { background:#fff; border:1px solid var(--border); border-radius:16px; padding:20px 22px; box-shadow:var(--shadow); position:relative; overflow:hidden; }
+  .stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
+  .stat-card.blue::before   { background:var(--accent); }
+  .stat-card.green::before  { background:var(--accent3); }
+  .stat-card.orange::before { background:var(--warning); }
+  .stat-card.red::before    { background:var(--danger); }
+  .stat-card.purple::before { background:var(--accent2); }
+  .stat-label { font-size:11px; font-weight:600; color:var(--text3); letter-spacing:.08em; text-transform:uppercase; margin-bottom:10px; }
+  .stat-value { font-family:'Fraunces',serif; font-size:28px; color:var(--text); margin-bottom:4px; }
+  .stat-sub { font-size:12px; color:var(--text3); }
+
+  .card { background:#fff; border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow); overflow:hidden; margin-bottom:24px; }
+  .card-header { display:flex; align-items:center; justify-content:space-between; padding:18px 22px; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:12px; }
+  .card-header h2 { font-family:'Fraunces',serif; font-size:18px; color:var(--text); }
+  .card-body { padding:22px; }
+  .filters { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .filter-select { width:auto; font-size:13px; padding:8px 12px; }
+
+  .table-wrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  thead tr { background:var(--surface2); }
+  th { padding:11px 14px; text-align:left; font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text3); white-space:nowrap; border-bottom:1px solid var(--border); }
+  td { padding:12px 14px; border-bottom:1px solid var(--border); color:var(--text); }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:#f8faff; }
+  .empty-state { padding:56px 20px; text-align:center; color:var(--text3); }
+  .empty-icon { font-size:40px; margin-bottom:10px; }
+
+  .badge { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+  .badge-yes  { background:#f0fdf4; color:#166534; }
+  .badge-no   { background:#fef2f2; color:#b91c1c; }
+  .badge-pend { background:#fff7ed; color:#c2410c; }
+  .badge-rev  { background:#ede9fe; color:#5b21b6; }
+  .badge-role-admin   { background:#ede9fe; color:#5b21b6; }
+  .badge-role-subjefe { background:#fff7ed; color:#c2410c; }
+  .badge-role-user    { background:#f0fdf4; color:#166534; }
+
+  .form-card { background:#fff; border:1px solid var(--border); border-radius:16px; padding:28px; margin-bottom:24px; box-shadow:var(--shadow); }
+  .form-card h2 { font-family:'Fraunces',serif; font-size:20px; margin-bottom:22px; }
+  .form-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:18px; }
+  .form-grid .full { grid-column:1/-1; }
+  .form-actions { display:flex; gap:10px; margin-top:22px; justify-content:flex-end; }
+
+  .admin-grid { display:grid; grid-template-columns:1fr 1.6fr; gap:24px; align-items:start; }
+  @media(max-width:860px){ .admin-grid { grid-template-columns:1fr; } }
+  .role-select-wrap { display:flex; gap:10px; }
+  .role-opt { flex:1; border:2px solid var(--border); border-radius:12px; padding:14px; cursor:pointer; transition:all .18s; text-align:center; }
+  .role-opt:hover { border-color:var(--accent); }
+  .role-opt.selected { border-color:var(--accent2); background:rgba(124,92,252,.06); }
+  .role-opt .role-icon { font-size:24px; margin-bottom:6px; }
+  .role-opt .role-name { font-size:13px; font-weight:700; }
+  .role-opt .role-desc { font-size:11px; color:var(--text3); margin-top:3px; }
+
+  .report-actions { display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; }
+  .meta-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px; }
+  .meta-card { background:#fff; border:1px solid var(--border); border-radius:14px; padding:18px; box-shadow:var(--shadow); }
+
+  /* MODAL */
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(15,23,42,0.5); z-index:1000; align-items:center; justify-content:center; backdrop-filter:blur(4px); }
+  .modal-overlay.open { display:flex; }
+
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loadingScreen">
+  <div class="loader-logo">📞 Confirmaciones</div>
+  <div class="loader-sub">Cargando sistema...</div>
+  <div class="spinner"></div>
+</div>
+
+<!-- LOGIN -->
+<div id="loginScreen" style="display:none;">
+  <div class="login-wrap">
+    <div class="login-side">
+      <div class="login-side-logo">📞 Confirmaciones</div>
+      <div class="login-side-bottom">
+        <div class="login-side-quote">"La confirmación oportuna es la base de una gestión exitosa."</div>
+        <div class="login-side-author">— Sistema interno, 2026</div>
+      </div>
+    </div>
+    <div class="login-form">
+      <h2>Bienvenido</h2>
+      <p>Ingresa tus credenciales para acceder al sistema</p>
+      <div class="field-group">
+        <label>Correo Electrónico</label>
+        <input type="email" id="loginUser" placeholder="usuario@bantrab.com" autocomplete="email">
+      </div>
+      <div class="field-group">
+        <label>Contraseña</label>
+        <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button class="btn btn-primary" onclick="doLogin()">Ingresar al Sistema</button>
+      <div class="error-msg" id="loginError">⚠ Correo o contraseña incorrectos.</div>
+      <div id="loginBloqueo" style="display:none;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:8px;padding:10px;font-size:13px;margin-top:10px;text-align:center;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="appScreen">
+  <div class="topbar">
+    <div class="topbar-brand">
+      📞 Confirmaciones
+    </div>
+    <div class="topbar-user">
+      <span id="topRolBadge" class="user-badge"></span>
+      <span id="topCentro" style="color:var(--text2);font-size:13px;"></span>
+      <span id="topUser" style="font-weight:600;font-size:13px;"></span>
+      <button class="btn btn-ghost btn-sm" onclick="abrirCambioPass()">🔑 Cambiar Contraseña</button>
+      <button class="btn btn-ghost btn-sm" onclick="doLogout()">Salir</button>
+    </div>
+  </div>
+
+  <!-- MODAL CAMBIAR CONTRASEÑA -->
+  <div class="modal-overlay" id="modalCambioPass" onclick="cerrarCambioPass(event)">
+    <div style="background:var(--card);border-radius:16px;padding:32px;width:400px;max-width:90vw;">
+      <h3 style="margin:0 0 6px;color:var(--text)">🔑 Cambiar Contraseña</h3>
+      <p style="color:var(--text2);font-size:13px;margin:0 0 20px">Ingresa tu nueva contraseña</p>
+      <div class="field-group">
+        <label>Nueva Contraseña</label>
+        <input type="password" id="newPass1" placeholder="Mínimo 8 caracteres, mayúscula y número">
+      </div>
+      <div class="field-group">
+        <label>Confirmar Contraseña</label>
+        <input type="password" id="newPass2" placeholder="Repite la contraseña">
+      </div>
+      <div id="cambioPassError" style="display:none;color:#f87171;font-size:13px;margin-bottom:12px;"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+        <button class="btn btn-outline" onclick="cerrarCambioPass()">Cancelar</button>
+        <button class="btn btn-primary" onclick="confirmarCambioPass()">💾 Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('registro')">➕ Nuevo Registro</div>
+    <div class="tab" onclick="switchTab('consulta')">🔍 Consultar Datos</div>
+    <div class="tab" onclick="switchTab('reportes')">📊 Reportes</div>
+    <div class="tab" id="tabAdmin" style="display:none" onclick="switchTab('admin')">⚙️ Administración</div>
+  </div>
+
+  <div class="content">
+
+    <!-- REGISTRO -->
+    <div class="panel active" id="panel-registro">
+      <div class="form-card">
+        <h2>Nueva Confirmación</h2>
+        <div class="form-grid">
+          <div class="field-group">
+            <label>Gestión</label>
+            <input type="text" id="f_gestion" placeholder="Ej: GT-2024-001">
+          </div>
+          <div class="field-group">
+            <label>Nombre del Cliente</label>
+            <input type="text" id="f_nombre" placeholder="Nombre del cliente">
+          </div>
+          <div class="field-group">
+            <label>Fecha Confirmación</label>
+            <input type="date" id="f_fecha">
+          </div>
+          <div class="field-group">
+            <label>Analista / Auxiliar</label>
+            <input type="text" id="f_analista" readonly style="opacity:.6;cursor:not-allowed;">
+          </div>
+          <div class="field-group">
+            <label>Resultado</label>
+            <select id="f_resultado">
+              <option value="">— Seleccione —</option>
+              <option>Aprobado</option><option>Rechazado</option>
+              <option>En revisión</option><option>Pendiente</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label>Documento Confirmado</label>
+            <select id="f_documento">
+              <option value="">— Seleccione —</option>
+              <option>Carta de Cancelación</option>
+              <option>Constancia Ingresos</option>
+              <option>Finiquito</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label>Producto</label>
+            <select id="f_producto">
+              <option value="">— Seleccione —</option>
+              <option>Crédito</option>
+              <option>Tarjeta</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label>CAABF (Centro)</label>
+            <input type="text" id="f_caabf" readonly style="opacity:.6;cursor:not-allowed;">
+          </div>
+          <div class="field-group full">
+            <label>Observaciones</label>
+            <textarea id="f_observaciones" rows="3" placeholder="Observaciones adicionales..."></textarea>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-outline" onclick="limpiarForm()">Limpiar</button>
+          <button class="btn btn-primary" style="width:auto;padding:11px 28px;" onclick="guardarRegistro()">💾 Guardar Registro</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONSULTA -->
+    <div class="panel" id="panel-consulta">
+      <div class="table-card">
+        <div class="table-header">
+          <h2>Registros de Confirmaciones</h2>
+          <div class="table-filters">
+            <select class="filter-select" id="filtCentro" onchange="renderTabla()">
+              <option value="">Todos los centros</option>
+              <option>Petapa</option><option>Zona 1</option><option>Torre 2</option>
+              <option>Coban</option><option>Mazate</option><option>Totonicapan</option>
+              <option>Monjas</option><option>Escuintla</option><option>Peten</option><option>Zacapa</option>
+            </select>
+            <select class="filter-select" id="filtResultado" onchange="renderTabla()">
+              <option value="">Todos los resultados</option>
+              <option>Aprobado</option><option>Rechazado</option>
+              <option>En revisión</option><option>Pendiente</option>
+            </select>
+            <input type="date" class="filter-select" id="filtFechaDesde" onchange="renderTabla()" style="width:145px;">
+            <input type="date" class="filter-select" id="filtFechaHasta" onchange="renderTabla()" style="width:145px;">
+            <input type="text" class="filter-select" id="filtBuscar" placeholder="🔍 Buscar..." style="width:140px;" oninput="renderTabla()">
+            <button class="btn btn-outline btn-sm" onclick="actualizarDesdeSupabase()" id="btnActualizar">🔄 Actualizar</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>Centro</th><th>Gestión</th><th>Nombre Cliente</th>
+                <th>Fecha</th><th>Analista</th><th>Resultado</th><th>Documento</th><th>Producto</th>
+                <th>CAABF</th><th>Ingresado por</th><th>Observaciones</th><th>Acción</th>
+              </tr>
+            </thead>
+            <tbody id="tablaBody"></tbody>
+          </table>
+          <div class="empty-state" id="emptyState">
+            <div class="icon">📭</div>No hay registros que coincidan.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- REPORTES -->
+    <div class="panel" id="panel-reportes">
+      <div class="report-actions">
+        <button class="btn btn-accent btn-sm" onclick="exportarCSV()">📥 Exportar CSV</button>
+        <button class="btn btn-outline btn-sm" onclick="renderReportes()">🔄 Actualizar</button>
+      </div>
+
+      <!-- Filtros de fecha para reportes -->
+      <div class="form-card" style="padding:18px 24px;margin-bottom:20px;">
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <label style="text-transform:none;font-size:13px;color:var(--text2);margin:0;">Desde</label>
+            <input type="date" id="repFechaDesde" onchange="renderReportes()" style="width:145px;padding:8px 12px;font-size:13px;">
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <label style="text-transform:none;font-size:13px;color:var(--text2);margin:0;">Hasta</label>
+            <input type="date" id="repFechaHasta" onchange="renderReportes()" style="width:145px;padding:8px 12px;font-size:13px;">
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="resetFechasReporte()">📅 Mes actual</button>
+        </div>
+      </div>
+
+      <div class="stats-grid" id="statsGrid"></div>
+
+      <!-- Metas por centro (solo admin) -->
+      <div class="table-card" id="metasCentroCard" style="margin-bottom:24px;">
+        <div class="table-header">
+          <h2>🎯 Metas por Centro</h2>
+          <span id="metasLockMsg" style="font-size:12px;color:var(--text3);"></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Centro</th><th>Gestiones del Mes</th><th>% Objetivo</th><th>Meta (confirmaciones)</th></tr></thead>
+            <tbody id="metasBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-header">
+          <h2>Resumen por Centro de Procesamiento</h2>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Centro</th><th>Total</th><th>Confirmados</th><th>Aprobados</th><th>Rechazados</th><th>Pendientes</th><th>Meta</th><th>% Avance</th></tr></thead>
+            <tbody id="reporteBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADMIN -->
+    <div class="panel" id="panel-admin">
+      <div class="page-header">
+        <h1>⚙️ Administración de Usuarios</h1>
+        <p>Solo el administrador puede gestionar usuarios del sistema</p>
+      </div>
+
+      <div style="display:grid;grid-template-columns:400px 1fr;gap:24px;align-items:start;">
+
+        <!-- Formulario crear usuario -->
+        <div class="card">
+          <div class="card-header"><h2>➕ Nuevo Usuario</h2></div>
+          <div class="card-body">
+            <div class="field-group">
+              <label>Nombre de Usuario</label>
+              <input type="text" id="nu_user" placeholder="Ej: maria.lopez">
+            </div>
+            <div class="field-group">
+              <label>Correo Electrónico</label>
+              <input type="email" id="nu_email" placeholder="usuario@bantrab.com">
+            </div>
+            <div class="field-group">
+              <label>Contraseña Temporal</label>
+              <input type="password" id="nu_pass" placeholder="Mín. 8 caracteres, mayúscula y número">
+            </div>
+            <div class="field-group">
+              <label>Rol</label>
+              <div class="role-select-wrap">
+                <div class="role-opt" id="roleOptAdmin" onclick="selectRole('admin')">
+                  <div class="role-icon">🛡️</div>
+                  <div class="role-name">Admin</div>
+                  <div class="role-desc">Acceso total</div>
+                </div>
+                <div class="role-opt" id="roleOptSubjefe" onclick="selectRole('subjefe')">
+                  <div class="role-icon">👔</div>
+                  <div class="role-name">Sub Jefe</div>
+                  <div class="role-desc">Todo su centro</div>
+                </div>
+                <div class="role-opt selected" id="roleOptUser" onclick="selectRole('user')">
+                  <div class="role-icon">👤</div>
+                  <div class="role-name">Usuario</div>
+                  <div class="role-desc">Solo lo suyo</div>
+                </div>
+              </div>
+            </div>
+            <div class="field-group" id="centroField">
+              <label>Centro de Procesamiento</label>
+              <select id="nu_centro">
+                <option value="">— Seleccione —</option>
+                <option>Petapa</option><option>Zona 1</option><option>Torre 2</option>
+                <option>Coban</option><option>Mazate</option><option>Totonicapan</option>
+                <option>Monjas</option><option>Escuintla</option><option>Peten</option><option>Zacapa</option>
+              </select>
+            </div>
+            <button class="btn btn-success" style="width:100%;justify-content:center;margin-top:4px;" onclick="crearUsuario()">
+              ✅ Crear Usuario
+            </button>
+            <div id="adminMsg" style="display:none;margin-top:12px;padding:10px;border-radius:8px;font-size:13px;"></div>
+          </div>
+        </div>
+
+        <!-- Tabla de usuarios -->
+        <div class="card">
+          <div class="card-header">
+            <h2>👥 Usuarios del Sistema</h2>
+            <span id="conteoUsuarios" style="font-size:13px;color:var(--text3);"></span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Usuario</th>
+                  <th>Correo</th>
+                  <th>Rol</th>
+                  <th>Centro</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="usuariosBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL CAMBIAR ROL -->
+<div class="modal-overlay" id="modalCambioRol" onclick="cerrarCambioRol(event)">
+  <div class="modal" style="width:440px;">
+    <h3>🔄 Cambiar Rol de Usuario</h3>
+    <div class="modal-sub" id="cambioRolSub"></div>
+    <div class="field-group">
+      <label>Nuevo Rol</label>
+      <div class="role-select-wrap">
+        <div class="role-opt" id="crAdmin" onclick="selectNuevoRol('admin')">
+          <div class="role-icon">🛡️</div>
+          <div class="role-name">Admin</div>
+          <div class="role-desc">Acceso total</div>
+        </div>
+        <div class="role-opt" id="crSubjefe" onclick="selectNuevoRol('subjefe')">
+          <div class="role-icon">👔</div>
+          <div class="role-name">Sub Jefe</div>
+          <div class="role-desc">Todo su centro</div>
+        </div>
+        <div class="role-opt" id="crUser" onclick="selectNuevoRol('user')">
+          <div class="role-icon">👤</div>
+          <div class="role-name">Usuario</div>
+          <div class="role-desc">Solo lo suyo</div>
+        </div>
+      </div>
+    </div>
+    <div class="field-group" id="crCentroField">
+      <label>Centro de Procesamiento</label>
+      <select id="cr_centro">
+        <option value="">— Seleccione —</option>
+        <option>Petapa</option><option>Zona 1</option><option>Torre 2</option>
+        <option>Coban</option><option>Mazate</option><option>Totonicapan</option>
+        <option>Monjas</option><option>Escuintla</option><option>Peten</option><option>Zacapa</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="cerrarCambioRol()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarCambioRol()">💾 Guardar Cambio</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR PENDIENTE -->
+<div class="modal-overlay" id="modalOverlay" onclick="cerrarModal(event)">
+  <div class="modal">
+    <h3>✏️ Editar Registro Pendiente</h3>
+    <div class="modal-sub">Puedes cambiar el Resultado de registros Pendientes o En revisión.</div>
+    <div class="modal-info" id="modalInfo"></div>
+    <div class="field-group" style="margin-bottom:18px;">
+      <label>Resultado</label>
+      <select id="edit_resultado">
+        <option value="Pendiente">Pendiente</option>
+        <option value="Aprobado">Aprobado</option>
+        <option value="Rechazado">Rechazado</option>
+        <option value="En revisión">En revisión</option>
+      </select>
+    </div>
+    <div class="field-group" style="margin-bottom:24px;">
+      <label>Observaciones</label>
+      <textarea id="edit_observaciones" rows="3" placeholder="Observaciones actualizadas..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-warning" onclick="guardarEdicion()">💾 Guardar Cambios</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CONFIRMAR ELIMINAR -->
+<div class="modal-overlay" id="modalEliminar" onclick="cerrarModalEliminar(event)">
+  <div class="modal" style="width:400px;">
+    <h3>🗑️ Eliminar Usuario</h3>
+    <div class="modal-sub">Esta acción no se puede deshacer.</div>
+    <p style="color:var(--text2);font-size:14px;margin-bottom:24px;">
+      ¿Eliminar al usuario <strong id="eliminarNombre" style="color:var(--text)"></strong>?
+    </p>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="cerrarModalEliminar()">Cancelar</button>
+      <button class="btn btn-danger"  onclick="confirmarEliminar()">Sí, eliminar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── ESTADO ──
+let currentUser    = null;
+let currentCentro  = null;
+let currentRol     = null;
+let editandoId     = null;
+let eliminandoUser = null;
+let rolSeleccionado = 'user';
+
+let datos    = JSON.parse(localStorage.getItem('confirmaciones')    || '[]');
+let usuarios = JSON.parse(localStorage.getItem('usuarios_sistema')  || '[]');
+
+// Admin inicial eliminado - usar Supabase Auth
+
+// ── SUPABASE ──
+const SUPABASE_URL = 'https://lqvhzlrzbfddgssmixtw.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxxdmh6bHJ6YmZkZGdzc21peHR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2MDI2NDIsImV4cCI6MjA5NDE3ODY0Mn0._G331m37PuWtNvhBaghtv-uJEMToXz8pvN6ME7Ea3mY';
+
+function mapConfirmacion(r) {
+  return {
+    id:               r.id,
+    centro:           r.centro,
+    ingresadoPor:     r.usuario || r.ingresadoPor || '',
+    fechaIngreso:     r.fecha_ingreso || r.fechaIngreso || r.fecha_confirm || r.fecha || '',
+    gestion:          r.gestion || '',
+    nombre:           r.nombre || '',
+    fecha:            r.fecha_confirm || r.fecha || '',
+    analista:         r.analista || '',
+    resultado:        r.resultado || '',
+    documento:        r.documento || '',
+    producto:         r.producto || '',
+    caabf:            r.caabf || '',
+    observaciones:    r.observaciones || '',
+    modificadoPor:    r.modificado_por || r.modificadoPor || '',
+    fechaModificacion:r.fecha_modificacion || r.fechaModificacion || ''
+  };
+}
+
+// Cargar usuarios Y confirmaciones desde Supabase al iniciar
+// ══ SUPABASE AUTH ══
+let supabaseSession = null;
+
+async function sbAuth(email, password) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  return res.json();
+}
+
+async function sbSignOut() {
+  if (!supabaseSession) return;
+  await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${supabaseSession.access_token}` }
+  }).catch(()=>{});
+}
+
+function getAuthHeaders() {
+  return {
+    'apikey': SUPABASE_KEY,
+    'Authorization': `Bearer ${supabaseSession?.access_token || SUPABASE_KEY}`,
+    'Content-Type': 'application/json',
+    'Prefer': 'return=representation'
+  };
+}
+
+async function cargarUsuariosDesdeSupabase() {
+  // Sin sesión activa, solo mostrar login
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display   = 'flex';
+}
+cargarUsuariosDesdeSupabase();
+
+async function cargarDatosPostLogin() {
+  try {
+    const [resUsers, resConf] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/usuarios?select=*`, { headers: getAuthHeaders() }),
+      fetch(`${SUPABASE_URL}/rest/v1/confirmaciones?select=*&order=id.asc`, { headers: getAuthHeaders() })
+    ]);
+    if (resUsers.ok) {
+      const dataUsers = await resUsers.json();
+      usuarios = dataUsers.map(u => ({
+        username: u.username, rol: u.rol, centro: u.centro,
+        email: u.email || '', auth_id: u.auth_id || '',
+        creadoPor: u.creado_por, fechaCreacion: u.fecha_creacion
+      }));
+      guardarUsuarios();
+    }
+    if (resConf.ok) {
+      const dataConf = await resConf.json();
+      datos = dataConf.map(r => mapConfirmacion(r));
+      localStorage.setItem('confirmaciones', JSON.stringify(datos));
+    }
+  } catch(e) {}
+}
+
+function guardarUsuarios() { localStorage.setItem('usuarios_sistema', JSON.stringify(usuarios)); }
+
+async function supabaseInsert(reg) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/confirmaciones`, {
+      method:'POST', headers:{...getAuthHeaders(),'Prefer':'return=minimal'},
+      body:JSON.stringify(reg)
+    });
+  } catch(e) {}
+}
+async function supabaseUpdate(id, cambios) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/confirmaciones?id=eq.${id}`, {
+      method:'PATCH', headers:{...getAuthHeaders(),'Prefer':'return=minimal'},
+      body:JSON.stringify(cambios)
+    });
+  } catch(e) {}
+}
+
+async function supabaseInsertUsuario(u) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/usuarios`, {
+      method:'POST', headers:{...getAuthHeaders(),'Prefer':'return=minimal'},
+      body:JSON.stringify({ username:u.username, rol:u.rol, centro:u.centro||null, email:u.email||'', creado_por:u.creadoPor, fecha_creacion:u.fechaCreacion })
+    });
+  } catch(e) {}
+}
+async function supabaseDeleteUsuario(username) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/usuarios?username=eq.${encodeURIComponent(username)}`, {
+      method:'DELETE', headers:getAuthHeaders()
+    });
+  } catch(e) {}
+}
+async function recargarUsuarios() {
+  const btn = document.querySelector('button[onclick="recargarUsuarios()"]');
+  btn.textContent = '⏳ Sincronizando...';
+  btn.disabled = true;
+  try {
+    const [resUsers, resConf] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/usuarios?select=*`, {
+        headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
+      }),
+      fetch(`${SUPABASE_URL}/rest/v1/confirmaciones?select=*&order=id.asc`, {
+        headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`}
+      })
+    ]);
+
+    if (resUsers.ok) {
+      const dataUsers = await resUsers.json();
+      if (dataUsers && dataUsers.length > 0) {
+        usuarios = dataUsers.map(u => ({
+          username: u.username, password: u.password, rol: u.rol,
+          centro: u.centro, creadoPor: u.creado_por, fechaCreacion: u.fecha_creacion
+        }));
+        guardarUsuarios();
+      }
+    }
+
+    if (resConf.ok) {
+      const dataConf = await resConf.json();
+      if (dataConf && dataConf.length > 0) {
+        datos = dataConf.map(r => ({
+          id:               r.id,
+          centro:           r.centro,
+          ingresadoPor:     r.usuario,
+          fechaIngreso:     r.fecha_ingreso || '',
+          gestion:          r.gestion,
+          nombre:           r.nombre,
+          fecha:            r.fecha_confirm,
+          analista:         r.analista,
+          resultado:        r.resultado,
+          documento:        r.documento,
+          producto:         r.producto,
+          caabf:            r.caabf,
+          observaciones:    r.observaciones,
+          modificadoPor:    r.modificado_por || '',
+          fechaModificacion:r.fecha_modificacion || ''
+        }));
+        localStorage.setItem('confirmaciones', JSON.stringify(datos));
+      }
+    }
+
+    document.getElementById('loginSuccess').style.display = 'block';
+    document.getElementById('loginError').style.display   = 'none';
+  } catch(e) {}
+  btn.textContent = '🔄 Sincronizar Usuarios';
+  btn.disabled = false;
+}
+
+// ══ SEGURIDAD ══
+const SESSION_TIMEOUT = 30 * 60 * 1000;
+const MAX_INTENTOS = 5;
+const BLOQUEO_MS = 15 * 60 * 1000;
+let sessionTimer = null;
+
+function resetSessionTimer() {
+  clearTimeout(sessionTimer);
+  setTimeout(() => {
+    if (currentUser) showToast('⏱ Tu sesión expirará en 5 minutos por inactividad.', 'warning');
+  }, SESSION_TIMEOUT - 5 * 60 * 1000);
+  sessionTimer = setTimeout(() => {
+    if (currentUser) { showToast('⏱ Sesión expirada.', 'warning'); setTimeout(() => doLogout(), 2000); }
+  }, SESSION_TIMEOUT);
+}
+
+['click','keydown','mousemove','scroll','touchstart'].forEach(evt =>
+  document.addEventListener(evt, () => { if (currentUser) resetSessionTimer(); }, { passive: true })
+);
+
+function getIntentos() {
+  const d = JSON.parse(localStorage.getItem('login_intentos') || '{"count":0,"ts":0}');
+  if (Date.now() - d.ts > BLOQUEO_MS) return { count: 0, ts: 0 };
+  return d;
+}
+
+function registrarIntento(exito) {
+  if (exito) { localStorage.removeItem('login_intentos'); return; }
+  const d = getIntentos();
+  localStorage.setItem('login_intentos', JSON.stringify({ count: d.count + 1, ts: Date.now() }));
+}
+
+function registrarLog(accion, detalle = '') {
+  const logs = JSON.parse(localStorage.getItem('activity_log') || '[]');
+  logs.unshift({ user: currentUser, rol: currentRol, centro: currentCentro, accion, detalle, ts: new Date().toLocaleString('es-GT') });
+  if (logs.length > 200) logs.splice(200);
+  localStorage.setItem('activity_log', JSON.stringify(logs));
+}
+
+async function doLogin() {
+  const email = document.getElementById('loginUser').value.trim().toLowerCase();
+  const pass  = document.getElementById('loginPass').value;
+  const err   = document.getElementById('loginError');
+  const blq   = document.getElementById('loginBloqueo');
+  err.style.display = 'none';
+  blq.style.display = 'none';
+
+  const intentos = getIntentos();
+  if (intentos.count >= MAX_INTENTOS) {
+    const restante = Math.ceil((BLOQUEO_MS - (Date.now() - intentos.ts)) / 60000);
+    blq.textContent = `🔒 Demasiados intentos. Espera ${restante} minuto(s).`;
+    blq.style.display = 'block'; return;
+  }
+
+  if (!email || !pass) {
+    err.textContent = '⚠ Ingresa tu correo y contraseña.';
+    err.style.display = 'block'; return;
+  }
+
+  // Autenticar con Supabase Auth
+  const authData = await sbAuth(email, pass);
+  if (authData.error || !authData.access_token) {
+    registrarIntento(false);
+    const restantes = MAX_INTENTOS - (intentos.count + 1);
+    err.textContent = restantes > 0
+      ? `❌ Correo o contraseña incorrectos. ${restantes} intento(s) restante(s).`
+      : '🔒 Cuenta bloqueada por 15 minutos.';
+    err.style.display = 'block'; return;
+  }
+
+  registrarIntento(true);
+  supabaseSession = authData;
+  await cargarDatosPostLogin();
+
+  const perfil = usuarios.find(u => u.auth_id === authData.user?.id || u.email === email);
+  if (!perfil) {
+    err.textContent = '⚠ Usuario no configurado. Contacta al administrador.';
+    err.style.display = 'block';
+    supabaseSession = null; return;
+  }
+
+  currentUser = perfil.username; currentCentro = perfil.centro; currentRol = perfil.rol;
+  registrarLog('LOGIN', 'Acceso via Supabase Auth');
+  resetSessionTimer();
+
+  const badge = document.getElementById('topRolBadge');
+  if (perfil.rol==='admin')        { badge.textContent='🛡️ Admin';    badge.className='user-badge badge-admin'; }
+  else if (perfil.rol==='subjefe') { badge.textContent='👔 Sub Jefe'; badge.className='user-badge badge-subjefe'; }
+  else                             { badge.textContent='👤 Usuario';   badge.className='user-badge badge-user'; }
+
+  document.getElementById('topCentro').textContent = perfil.centro ? perfil.centro + ' ·' : '';
+  document.getElementById('topUser').textContent   = perfil.username;
+  document.getElementById('tabAdmin').style.display = perfil.rol==='admin' ? '' : 'none';
+
+  const filtCentro = document.getElementById('filtCentro');
+  if (perfil.rol==='admin') { filtCentro.disabled = false; }
+  else { filtCentro.value = perfil.centro; filtCentro.disabled = true; }
+
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appScreen').style.display   = 'flex';
+  document.getElementById('f_caabf').value    = perfil.centro || '';
+  document.getElementById('f_analista').value = perfil.username;
+  document.getElementById('f_fecha').valueAsDate = new Date();
+  initFechasConsulta(); initFechasReporte();
+  renderTabla(); renderReportes();
+}
+
+document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
+
+async function doLogout() {
+  registrarLog('LOGOUT');
+  clearTimeout(sessionTimer);
+  await sbSignOut();
+  supabaseSession = null;
+  currentUser = currentCentro = currentRol = null;
+  datos = []; usuarios = [];
+  document.getElementById('appScreen').style.display   = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('loginUser').value = '';
+  document.getElementById('loginPass').value = '';
+  switchTab('registro');
+}
+
+// ══ CAMBIAR CONTRASEÑA ══
+function abrirCambioPass() {
+  document.getElementById('newPass1').value = '';
+  document.getElementById('newPass2').value = '';
+  document.getElementById('cambioPassError').style.display = 'none';
+  document.getElementById('modalCambioPass').style.display = 'flex';
+}
+
+function cerrarCambioPass(e) {
+  if (e && e.target !== document.getElementById('modalCambioPass')) return;
+  document.getElementById('modalCambioPass').style.display = 'none';
+}
+
+async function confirmarCambioPass() {
+  const p1  = document.getElementById('newPass1').value;
+  const p2  = document.getElementById('newPass2').value;
+  const err = document.getElementById('cambioPassError');
+  err.style.display = 'none';
+
+  if (p1.length < 8)          { err.textContent='⚠ Mínimo 8 caracteres.'; err.style.display='block'; return; }
+  if (!/[A-Z]/.test(p1))      { err.textContent='⚠ Debe tener al menos una mayúscula.'; err.style.display='block'; return; }
+  if (!/[0-9]/.test(p1))      { err.textContent='⚠ Debe tener al menos un número.'; err.style.display='block'; return; }
+  if (p1 !== p2)               { err.textContent='⚠ Las contraseñas no coinciden.'; err.style.display='block'; return; }
+
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    method: 'PUT',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${supabaseSession.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: p1 })
+  });
+  const data = await res.json();
+  if (data.error) { err.textContent = `❌ Error: ${data.error.message}`; err.style.display='block'; return; }
+
+  registrarLog('CAMBIO_PASSWORD', 'Contraseña actualizada');
+  document.getElementById('modalCambioPass').style.display = 'none';
+  showToast('✅ Contraseña cambiada exitosamente.');
+}
+
+// ── TABS ──
+function switchTab(name) {
+  const names = ['registro','consulta','reportes','admin'];
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', names[i]===name));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+  if (name==='reportes') renderReportes();
+  if (name==='consulta') { actualizarDesdeSupabase(); }
+  if (name==='admin')    renderUsuarios();
+}
+
+// ── GUARDAR CONFIRMACIÓN ──
+async function guardarRegistro() {
+  const get = id => document.getElementById(id).value.trim();
+  if (['f_gestion','f_nombre','f_fecha','f_analista','f_resultado'].some(id=>!get(id))) {
+    showToast('⚠ Complete los campos obligatorios.','#f59e0b'); return;
+  }
+  const reg = {
+    id:Date.now(), centro:currentCentro, ingresadoPor:currentUser,
+    fechaIngreso:new Date().toLocaleString('es-GT'),
+    gestion:get('f_gestion'), nombre:get('f_nombre'), fecha:get('f_fecha'),
+    analista:get('f_analista'), resultado:get('f_resultado'),
+    documento:get('f_documento'), producto:get('f_producto'), caabf:currentCentro, observaciones:get('f_observaciones'),
+  };
+  datos.push(reg);
+  localStorage.setItem('confirmaciones', JSON.stringify(datos));
+  await supabaseInsert({ centro:reg.centro, usuario:reg.ingresadoPor, gestion:reg.gestion, nombre:reg.nombre, fecha_confirm:reg.fecha, analista:reg.analista, resultado:reg.resultado, documento:reg.documento, producto:reg.producto, caabf:reg.caabf, observaciones:reg.observaciones });
+  showToast('✅ Registro guardado correctamente.');
+  limpiarForm();
+  document.getElementById('f_fecha').valueAsDate = new Date();
+  document.getElementById('f_caabf').value    = currentCentro||'';
+  document.getElementById('f_analista').value = currentUser||'';
+}
+
+function limpiarForm() {
+  ['f_gestion','f_nombre','f_fecha','f_resultado','f_documento','f_producto','f_observaciones'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f_caabf').value    = currentCentro||'';
+  document.getElementById('f_analista').value = currentUser||'';
+}
+
+// ── HELPERS DE FECHA ──
+function primerDiaMes() {
+  const h = new Date(); return `${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,'0')}-01`;
+}
+function ultimoDiaMes() {
+  const h = new Date(); const ult = new Date(h.getFullYear(), h.getMonth()+1, 0);
+  return `${ult.getFullYear()}-${String(ult.getMonth()+1).padStart(2,'0')}-${String(ult.getDate()).padStart(2,'0')}`;
+}
+function initFechasConsulta() {
+  document.getElementById('filtFechaDesde').value = primerDiaMes();
+  document.getElementById('filtFechaHasta').value = ultimoDiaMes();
+}
+function initFechasReporte() {
+  document.getElementById('repFechaDesde').value = primerDiaMes();
+  document.getElementById('repFechaHasta').value = ultimoDiaMes();
+}
+function resetFechasReporte() { initFechasReporte(); renderReportes(); }
+
+// ── ACTUALIZAR DESDE SUPABASE ──
+async function actualizarDesdeSupabase() {
+  const btn = document.getElementById('btnActualizar');
+  btn.textContent = '⏳ Cargando...';
+  btn.disabled = true;
+  try {
+    let url = `${SUPABASE_URL}/rest/v1/confirmaciones?select=*&order=id.asc`;
+    if (currentRol !== 'admin') {
+      url += `&centro=eq.${encodeURIComponent(currentCentro)}`;
+    }
+    console.log('URL:', url);
+    console.log('KEY:', '***hidden***');
+    const res = await fetch(url, { headers: getAuthHeaders() });
+    if (!res.ok) {
+      showToast('⚠ Error al conectar con Supabase.', '#f59e0b');
+      btn.textContent = '🔄 Actualizar';
+      btn.disabled = false;
+      return;
+    }
+    const dataConf = await res.json();
+    if (currentRol === 'admin') {
+      datos = dataConf.map(r => mapConfirmacion(r));
+    } else {
+      datos = datos.filter(d => d.centro !== currentCentro);
+      datos = datos.concat(dataConf.map(r => mapConfirmacion(r)));
+    }
+    localStorage.setItem('confirmaciones', JSON.stringify(datos));
+    renderTabla();
+    showToast(`✅ ${dataConf.length} registro(s) cargados.`);
+  } catch(e) {
+    console.log('Error:', e);
+    showToast('⚠ Error de conexión.', '#f59e0b');
+  }
+  btn.textContent = '🔄 Actualizar';
+  btn.disabled = false;
+}
+
+// ── TABLA ──
+function renderTabla() {
+  const filtCentro    = currentRol==='admin' ? document.getElementById('filtCentro').value : currentCentro;
+  const filtResultado = document.getElementById('filtResultado').value;
+  const buscar        = document.getElementById('filtBuscar').value.toLowerCase();
+  const desde         = document.getElementById('filtFechaDesde').value;
+  const hasta         = document.getElementById('filtFechaHasta').value;
+
+  const filtered = datos.filter(r => {
+    if (filtCentro    && r.centro    !== filtCentro)    return false;
+    if (filtResultado && r.resultado !== filtResultado) return false;
+    // Usuario solo ve sus propios registros; Sub Jefe ve todos los de su centro
+    if (currentRol === 'user' && r.ingresadoPor !== currentUser) return false;
+    if (desde && r.fecha < desde) return false;
+    if (hasta && r.fecha > hasta) return false;
+    if (buscar && !JSON.stringify(r).toLowerCase().includes(buscar)) return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('tablaBody');
+  const empty = document.getElementById('emptyState');
+  if (!filtered.length) { tbody.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = filtered.map((r,i) => {
+    const esPendiente = r.resultado === 'Pendiente' || r.resultado === 'En revisión';
+    const accionBtn = esPendiente
+      ? `<button class="edit-btn" onclick="abrirModal(${r.id})">✏️ Actualizar</button>`
+      : `<span style="color:var(--text3);font-size:12px;">—</span>`;
+    return `<tr>
+      <td style="color:var(--text3)">${i+1}</td>
+      <td><span style="font-weight:600;color:var(--accent)">${r.centro}</span></td>
+      <td>${r.gestion}</td><td>${r.nombre}</td><td>${r.fecha}</td>
+      <td>${r.analista}</td><td>${badgeResultado(r.resultado)}</td>
+      <td>${r.documento||'—'}</td><td>${r.producto||'—'}</td><td>${r.caabf||'—'}</td>
+      <td style="color:var(--text2)">${r.ingresadoPor} <span style="color:var(--text3);font-size:11px">(${r.centro})</span></td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;color:var(--text2)">${r.observaciones||'—'}</td>
+      <td>${accionBtn}</td></tr>`;
+  }).join('');
+}
+
+function badgeResultado(v) {
+  if (!v) return '—';
+  const map = {'Aprobado':'badge-yes','Rechazado':'badge-no','En revisión':'badge-pend','Pendiente':'badge-pend'};
+  return `<span class="badge ${map[v]||''}">${v}</span>`;
+}
+
+// ── MODAL EDITAR ──
+function abrirModal(id) {
+  const reg = datos.find(r => r.id===id);
+  if (!reg) return;
+  editandoId = id;
+  document.getElementById('modalInfo').innerHTML = `
+    <div class="modal-info-row"><span class="modal-info-label">Gestión</span><span>${reg.gestion}</span></div>
+    <div class="modal-info-row"><span class="modal-info-label">Cliente</span><span>${reg.nombre}</span></div>
+    <div class="modal-info-row"><span class="modal-info-label">Centro</span><span style="color:var(--accent);font-weight:600">${reg.centro}</span></div>
+    <div class="modal-info-row"><span class="modal-info-label">Ingresado por</span><span>${reg.ingresadoPor}</span></div>`;
+  document.getElementById('edit_resultado').value     = reg.resultado    || 'Pendiente';
+  document.getElementById('edit_observaciones').value = reg.observaciones || '';
+  document.getElementById('modalOverlay').classList.add('open');
+}
+function cerrarModal(e) {
+  if (e && e.target!==document.getElementById('modalOverlay')) return;
+  document.getElementById('modalOverlay').classList.remove('open');
+  editandoId = null;
+}
+async function guardarEdicion() {
+  if (!editandoId) return;
+  const nuevoResultado = document.getElementById('edit_resultado').value;
+  const nuevasObs      = document.getElementById('edit_observaciones').value.trim();
+  const idx = datos.findIndex(r => r.id===editandoId);
+  if (idx===-1) return;
+  datos[idx].resultado         = nuevoResultado;
+  datos[idx].observaciones     = nuevasObs;
+  datos[idx].modificadoPor     = currentUser;
+  datos[idx].fechaModificacion = new Date().toLocaleString('es-GT');
+  localStorage.setItem('confirmaciones', JSON.stringify(datos));
+  await supabaseUpdate(editandoId, {resultado:nuevoResultado, observaciones:nuevasObs});
+  document.getElementById('modalOverlay').classList.remove('open');
+  editandoId = null;
+  renderTabla();
+  showToast('✅ Registro actualizado correctamente.');
+}
+
+// ── METAS POR CENTRO ──
+const CENTROS_LIST = ['Petapa','Zona 1','Torre 2','Coban','Mazate','Totonicapan','Monjas','Escuintla','Peten','Zacapa'];
+
+// Cargar metas guardadas o defaults
+let metasCentro = JSON.parse(localStorage.getItem('metasCentro') || 'null') ||
+  Object.fromEntries(CENTROS_LIST.map(c => [c, { gestiones: 100, objetivo: 20 }]));
+
+function guardarMetas() { localStorage.setItem('metasCentro', JSON.stringify(metasCentro)); }
+
+function renderMetasCentro() {
+  const esAdmin   = currentRol === 'admin';
+  const esSubjefe = currentRol === 'subjefe';
+  const lockMsg = document.getElementById('metasLockMsg');
+  if (lockMsg) lockMsg.textContent = esAdmin
+    ? '✏️ Puedes editar gestiones y % objetivo'
+    : esSubjefe
+    ? '✏️ Puedes editar las gestiones de tu centro · El % objetivo solo lo cambia el Admin'
+    : '🔒 Solo visualización';
+
+  const centros = esAdmin ? CENTROS_LIST : [currentCentro];
+  document.getElementById('metasCentroCard').style.display = '';
+
+  document.getElementById('metasBody').innerHTML = centros.map(c => {
+    const m = metasCentro[c] || { gestiones:100, objetivo:20 };
+    const metaConf = Math.round(m.gestiones * m.objetivo / 100);
+    const disabledGest = esAdmin || esSubjefe ? '' : 'disabled style="opacity:.5;cursor:not-allowed;"';
+    const disabledObj  = esAdmin ? '' : 'disabled style="opacity:.5;cursor:not-allowed;"';
+    return `<tr>
+      <td style="font-weight:600;color:var(--accent)">${c}</td>
+      <td><input type="number" value="${m.gestiones}" min="1" ${disabledGest}
+        style="width:90px;padding:6px 10px;font-size:13px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);"
+        onchange="actualizarMeta('${c}','gestiones',this.value)"></td>
+      <td><div style="display:flex;align-items:center;gap:6px;">
+        <input type="number" value="${m.objetivo}" min="1" max="100" ${disabledObj}
+          style="width:70px;padding:6px 10px;font-size:13px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);"
+          onchange="actualizarMeta('${c}','objetivo',this.value)">
+        <span style="color:var(--text2)">%</span>
+      </div></td>
+      <td><span style="background:rgba(124,92,252,.15);color:#a78bfa;padding:4px 12px;border-radius:8px;font-weight:700;font-size:13px;">${metaConf}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function actualizarMeta(centro, campo, valor) {
+  // Admin puede cambiar todo; subjefe solo gestiones
+  if (currentRol !== 'admin' && !(currentRol === 'subjefe' && campo === 'gestiones')) return;
+  if (!metasCentro[centro]) metasCentro[centro] = { gestiones:100, objetivo:20 };
+  metasCentro[centro][campo] = parseInt(valor) || 0;
+  guardarMetas();
+  renderReportes();
+}
+
+// ── REPORTES ──
+function renderReportes() {
+  const desde = document.getElementById('repFechaDesde')?.value || '';
+  const hasta = document.getElementById('repFechaHasta')?.value || '';
+
+  renderMetasCentro();
+
+  // Filtrar por fecha y rol
+  let fuente = datos.filter(r => {
+    if (desde && r.fecha < desde) return false;
+    if (hasta && r.fecha > hasta) return false;
+    return true;
+  });
+  if (currentRol === 'subjefe') fuente = fuente.filter(r=>r.centro===currentCentro);
+  if (currentRol === 'user')    fuente = fuente.filter(r=>r.ingresadoPor===currentUser);
+
+  const total   = fuente.length;
+  const apr     = fuente.filter(r=>r.resultado==='Aprobado').length;
+  const rec     = fuente.filter(r=>r.resultado==='Rechazado').length;
+  const pend    = fuente.filter(r=>r.resultado==='Pendiente').length;
+  const conf    = apr + rec;
+  const subLabel = currentRol==='admin' ? 'todos los centros' : currentRol==='subjefe' ? currentCentro : currentUser;
+
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Total Registros</div><div class="stat-value">${total}</div><div class="stat-sub">${subLabel}</div></div>
+    <div class="stat-card"><div class="stat-label">Confirmados</div><div class="stat-value" style="color:#4ade80">${conf}</div><div class="stat-sub">Aprobados + Rechazados</div></div>
+    <div class="stat-card"><div class="stat-label">Aprobados</div><div class="stat-value" style="color:#4ade80">${apr}</div><div class="stat-sub">&nbsp;</div></div>
+    <div class="stat-card"><div class="stat-label">Rechazados</div><div class="stat-value" style="color:#f87171">${rec}</div><div class="stat-sub">&nbsp;</div></div>
+    <div class="stat-card"><div class="stat-label">Pendientes</div><div class="stat-value" style="color:#fbbf24">${pend}</div><div class="stat-sub">requieren acción</div></div>`;
+
+  const centros = currentRol==='admin' ? CENTROS_LIST : [currentCentro];
+
+  document.getElementById('reporteBody').innerHTML = centros.map(c => {
+    const regs = fuente.filter(r=>r.centro===c);
+    const a    = regs.filter(r=>r.resultado==='Aprobado').length;
+    const rc   = regs.filter(r=>r.resultado==='Rechazado').length;
+    const p    = regs.filter(r=>r.resultado==='Pendiente').length;
+    const cf   = a + rc;
+    const m    = metasCentro[c] || { gestiones:100, objetivo:20 };
+    const metaConf = Math.round(m.gestiones * m.objetivo / 100);
+    const avance   = metaConf ? Math.round(cf / metaConf * 100) : 0;
+    const col      = avance >= 100 ? '#4ade80' : avance >= 50 ? '#fbbf24' : '#f87171';
+    return `<tr>
+      <td style="font-weight:600;color:var(--accent)">${c}</td>
+      <td>${regs.length}</td>
+      <td><span class="badge badge-yes">${cf}</span></td>
+      <td><span class="badge badge-yes">${a}</span></td>
+      <td><span class="badge badge-no">${rc}</span></td>
+      <td><span class="badge badge-pend">${p}</span></td>
+      <td style="color:var(--text2)">${metaConf} <span style="color:var(--text3);font-size:11px">(${m.objetivo}% de ${m.gestiones})</span></td>
+      <td><span style="font-weight:700;color:${col}">${avance}%</span></td></tr>`;
+  }).join('');
+}
+
+// ── ADMIN: USUARIOS ──
+function selectRole(rol) {
+  rolSeleccionado = rol;
+  document.getElementById('roleOptAdmin').classList.toggle('selected',   rol==='admin');
+  document.getElementById('roleOptSubjefe').classList.toggle('selected', rol==='subjefe');
+  document.getElementById('roleOptUser').classList.toggle('selected',    rol==='user');
+  // Admin no necesita centro; subjefe y user sí
+  document.getElementById('centroField').style.display = rol==='admin' ? 'none' : '';
+}
+
+async function crearUsuario() {
+  const user   = document.getElementById('nu_user').value.trim().toLowerCase();
+  const pass   = document.getElementById('nu_pass').value;
+  const email  = document.getElementById('nu_email')?.value.trim().toLowerCase() || '';
+  const centro = document.getElementById('nu_centro').value;
+
+  if (!user || !pass || !email)              { showToast('⚠ Completa usuario, correo y contraseña.','#f59e0b'); return; }
+  if (pass.length < 8)                       { showToast('⚠ Contraseña mínimo 8 caracteres.','#f59e0b'); return; }
+  if (!/[A-Z]/.test(pass))                   { showToast('⚠ Contraseña debe tener una mayúscula.','#f59e0b'); return; }
+  if (!/[0-9]/.test(pass))                   { showToast('⚠ Contraseña debe tener un número.','#f59e0b'); return; }
+  if (rolSeleccionado!=='admin' && !centro)  { showToast('⚠ Selecciona el centro.','#f59e0b'); return; }
+  if (usuarios.find(u => u.email===email))   { showToast('⚠ Ese correo ya existe.','#f59e0b'); return; }
+
+  // Crear usuario via Edge Function segura
+  const authRes = await fetch(`${SUPABASE_URL}/functions/v1/crear-usuario`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${supabaseSession.access_token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      email, password: pass, username: user,
+      rol: rolSeleccionado,
+      centro: rolSeleccionado==='admin' ? null : centro
+    })
+  });
+  const authData = await authRes.json();
+
+  if (!authRes.ok || authData.error) {
+    const msg = document.getElementById('adminMsg');
+    msg.style.display = 'block';
+    msg.style.background = '#fef2f2';
+    msg.style.color = '#dc2626';
+    msg.textContent = `❌ Error: ${authData.error || 'No se pudo crear el usuario'}`;
+    return;
+  }
+
+  // Agregar a lista local
+  const nuevoUsuario = {
+    username: user, email, rol: rolSeleccionado, auth_id: authData.id,
+    centro: rolSeleccionado==='admin' ? null : centro,
+    creadoPor: currentUser, fechaCreacion: new Date().toLocaleDateString('es-GT')
+  };
+  usuarios.push(nuevoUsuario);
+  guardarUsuarios();
+  registrarLog('CREAR_USUARIO', `${user} (${rolSeleccionado}) creado`);
+
+  document.getElementById('nu_user').value  = '';
+  document.getElementById('nu_pass').value  = '';
+  if (document.getElementById('nu_email')) document.getElementById('nu_email').value = '';
+  document.getElementById('nu_centro').value = '';
+  selectRole('user');
+  renderUsuarios();
+  showToast(`✅ Usuario "${user}" creado correctamente.`);
+}
+
+function renderUsuarios() {
+  document.getElementById('conteoUsuarios').textContent = `${usuarios.length} usuario(s)`;
+  document.getElementById('usuariosBody').innerHTML = usuarios.map(u => {
+    const rolBadge = u.rol==='admin'
+      ? `<span class="badge badge-role-admin">🛡️ Admin</span>`
+      : u.rol==='subjefe'
+      ? `<span class="badge badge-role-subjefe">👔 Sub Jefe</span>`
+      : `<span class="badge badge-role-user">👤 Usuario</span>`;
+    const esSelf = u.username === currentUser;
+    return `<tr>
+      <td><strong style="color:var(--accent)">${u.username}</strong>${esSelf?'<span style="font-size:10px;color:var(--text3);margin-left:6px;">(tú)</span>':''}</td>
+      <td style="font-size:12px;color:var(--text3)">${u.email||'—'}</td>
+      <td>${rolBadge}</td>
+      <td style="color:var(--text2)">${u.centro||'<span style="color:var(--text3)">Todos</span>'}</td>
+      <td><div style="display:flex;gap:6px;flex-wrap:wrap;">
+        ${!esSelf?`<button class="btn btn-ghost btn-sm" onclick="abrirCambioRol('${u.username}')">🔄 Cambiar Rol</button>`:''}
+        ${!esSelf?`<button class="btn btn-danger btn-sm" onclick="pedirEliminar('${u.username}')">🗑️</button>`:''}
+        ${esSelf?'<span style="color:var(--text3);font-size:12px;">—</span>':''}
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── CAMBIAR ROL ──
+let cambioRolUser = null;
+let nuevoRolSel = 'user';
+
+function abrirCambioRol(username) {
+  const u = usuarios.find(x => x.username === username);
+  if (!u) return;
+  cambioRolUser = username;
+  nuevoRolSel = u.rol;
+  document.getElementById('cambioRolSub').textContent = `Usuario: ${username} · Rol actual: ${u.rol}`;
+  document.getElementById('cr_centro').value = u.centro || '';
+  selectNuevoRol(u.rol);
+  document.getElementById('modalCambioRol').classList.add('open');
+}
+
+function cerrarCambioRol(e) {
+  if (e && e.target !== document.getElementById('modalCambioRol')) return;
+  document.getElementById('modalCambioRol').classList.remove('open');
+  cambioRolUser = null;
+}
+
+function selectNuevoRol(rol) {
+  nuevoRolSel = rol;
+  document.getElementById('crAdmin').classList.toggle('selected', rol==='admin');
+  document.getElementById('crSubjefe').classList.toggle('selected', rol==='subjefe');
+  document.getElementById('crUser').classList.toggle('selected', rol==='user');
+  document.getElementById('crCentroField').style.display = rol==='admin' ? 'none' : '';
+}
+
+async function confirmarCambioRol() {
+  if (!cambioRolUser) return;
+  const centro = nuevoRolSel==='admin' ? null : document.getElementById('cr_centro').value;
+  if (nuevoRolSel!=='admin' && !centro) { showToast('⚠ Selecciona el centro.','#f59e0b'); return; }
+  const idx = usuarios.findIndex(u => u.username===cambioRolUser);
+  if (idx===-1) return;
+  usuarios[idx].rol = nuevoRolSel;
+  usuarios[idx].centro = centro;
+  guardarUsuarios();
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/usuarios?username=eq.${encodeURIComponent(cambioRolUser)}`, {
+      method:'PATCH', headers:{...getAuthHeaders(),'Prefer':'return=minimal'},
+      body: JSON.stringify({ rol:nuevoRolSel, centro })
+    });
+  } catch(e) {}
+  registrarLog('CAMBIO_ROL', `${cambioRolUser} → ${nuevoRolSel}`);
+  document.getElementById('modalCambioRol').classList.remove('open');
+  cambioRolUser = null;
+  renderUsuarios();
+  showToast(`✅ Rol actualizado a ${nuevoRolSel}`);
+}
+
+function pedirEliminar(username) {
+  eliminandoUser = username;
+  document.getElementById('eliminarNombre').textContent = username;
+  document.getElementById('modalEliminar').classList.add('open');
+}
+function cerrarModalEliminar(e) {
+  if (e && e.target!==document.getElementById('modalEliminar')) return;
+  document.getElementById('modalEliminar').classList.remove('open');
+  eliminandoUser = null;
+}
+function confirmarEliminar() {
+  if (!eliminandoUser) return;
+  const esAdmin = usuarios.find(u=>u.username===eliminandoUser)?.rol==='admin';
+  const otrosAdmins = usuarios.filter(u=>u.rol==='admin'&&u.username!==eliminandoUser);
+  if (esAdmin && otrosAdmins.length===0) {
+    cerrarModalEliminar();
+    showToast('⚠ No puedes eliminar el único administrador.','#f59e0b'); return;
+  }
+  usuarios = usuarios.filter(u=>u.username!==eliminandoUser);
+  guardarUsuarios();
+  supabaseDeleteUsuario(eliminandoUser);
+  cerrarModalEliminar();
+  renderUsuarios();
+  showToast('🗑️ Usuario eliminado.');
+}
+
+// ── CSV ──
+function exportarCSV() {
+  // Usuarios no pueden exportar
+  if (currentRol === 'user') {
+    showToast('❌ No tienes permisos para exportar datos.', 'error');
+    registrarLog('EXPORT_BLOQUEADO', 'Usuario sin permisos intentó exportar');
+    return;
+  }
+  let fuente = datos;
+  if (currentRol === 'subjefe') fuente = datos.filter(r=>r.centro===currentCentro);
+  if (!fuente.length) { showToast('No hay datos para exportar.','#f59e0b'); return; }
+
+  registrarLog('EXPORT_CSV', `${fuente.length} registros exportados - Centro: ${currentCentro||'todos'}`);
+
+  const headers = ['Centro','Ingresado Por','Fecha Ingreso','Gestión','Nombre Cliente','Fecha Confirmación','Analista/Auxiliar','Resultado','Documento Confirmado','Producto','CAABF','Observaciones','Modificado Por','Fecha Modificación'];
+  const rows = fuente.map(r=>[
+    r.centro,
+    r.ingresadoPor,
+    r.fechaIngreso || r.fecha || '',
+    r.gestion,
+    r.nombre,
+    r.fecha,
+    r.analista,
+    r.resultado,
+    r.documento||'',
+    r.producto,
+    r.caabf,
+    (r.observaciones||'').replace(/,/g,';'),
+    r.modificadoPor||'',
+    r.fechaModificacion||''
+  ].map(v=>`"${v||''}"`).join(','));
+  const csv = [headers.join(','),...rows].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));
+  a.download = `confirmaciones_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  showToast('📥 Archivo CSV descargado.');
+}
+
+// ── TOAST ──
+function showToast(msg, bg='#22c55e') {
+  const t = document.getElementById('toast');
+  t.textContent=msg; t.style.background=bg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 3200);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key==='Escape') {
+    document.getElementById('modalOverlay').classList.remove('open');
+    document.getElementById('modalEliminar').classList.remove('open');
+    document.getElementById('modalCambioRol').classList.remove('open');
+    document.getElementById('modalCambioPass').style.display = 'none';
+    editandoId = eliminandoUser = cambioRolUser = null;
+  }
+});
+
+selectRole('user');
+</script>
+</body>
+</html>
