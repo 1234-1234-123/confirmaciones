@@ -194,7 +194,29 @@
       <span id="topRolBadge" class="user-badge"></span>
       <span id="topCentro" style="color:var(--text2);font-size:13px;"></span>
       <span id="topUser"   style="color:var(--text);font-size:13px;"></span>
+      <button class="btn btn-outline btn-sm" onclick="abrirCambioPass()">🔑 Cambiar Contraseña</button>
       <button class="btn btn-outline btn-sm" onclick="doLogout()">Salir</button>
+    </div>
+  </div>
+
+  <!-- MODAL CAMBIAR CONTRASEÑA -->
+  <div class="modal-overlay" id="modalCambioPass" onclick="cerrarCambioPass(event)">
+    <div style="background:var(--card);border-radius:16px;padding:32px;width:400px;max-width:90vw;">
+      <h3 style="margin:0 0 6px;color:var(--text)">🔑 Cambiar Contraseña</h3>
+      <p style="color:var(--text2);font-size:13px;margin:0 0 20px">Ingresa tu nueva contraseña</p>
+      <div class="field-group">
+        <label>Nueva Contraseña</label>
+        <input type="password" id="newPass1" placeholder="Mínimo 8 caracteres, mayúscula y número">
+      </div>
+      <div class="field-group">
+        <label>Confirmar Contraseña</label>
+        <input type="password" id="newPass2" placeholder="Repite la contraseña">
+      </div>
+      <div id="cambioPassError" style="display:none;color:#f87171;font-size:13px;margin-bottom:12px;"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+        <button class="btn btn-outline" onclick="cerrarCambioPass()">Cancelar</button>
+        <button class="btn btn-primary" onclick="confirmarCambioPass()">💾 Guardar</button>
+      </div>
     </div>
   </div>
 
@@ -784,6 +806,43 @@ async function doLogout() {
   document.getElementById('loginUser').value = '';
   document.getElementById('loginPass').value = '';
   switchTab('registro');
+}
+
+// ══ CAMBIAR CONTRASEÑA ══
+function abrirCambioPass() {
+  document.getElementById('newPass1').value = '';
+  document.getElementById('newPass2').value = '';
+  document.getElementById('cambioPassError').style.display = 'none';
+  document.getElementById('modalCambioPass').style.display = 'flex';
+}
+
+function cerrarCambioPass(e) {
+  if (e && e.target !== document.getElementById('modalCambioPass')) return;
+  document.getElementById('modalCambioPass').style.display = 'none';
+}
+
+async function confirmarCambioPass() {
+  const p1  = document.getElementById('newPass1').value;
+  const p2  = document.getElementById('newPass2').value;
+  const err = document.getElementById('cambioPassError');
+  err.style.display = 'none';
+
+  if (p1.length < 8)          { err.textContent='⚠ Mínimo 8 caracteres.'; err.style.display='block'; return; }
+  if (!/[A-Z]/.test(p1))      { err.textContent='⚠ Debe tener al menos una mayúscula.'; err.style.display='block'; return; }
+  if (!/[0-9]/.test(p1))      { err.textContent='⚠ Debe tener al menos un número.'; err.style.display='block'; return; }
+  if (p1 !== p2)               { err.textContent='⚠ Las contraseñas no coinciden.'; err.style.display='block'; return; }
+
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    method: 'PUT',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${supabaseSession.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: p1 })
+  });
+  const data = await res.json();
+  if (data.error) { err.textContent = `❌ Error: ${data.error.message}`; err.style.display='block'; return; }
+
+  registrarLog('CAMBIO_PASSWORD', 'Contraseña actualizada');
+  document.getElementById('modalCambioPass').style.display = 'none';
+  showToast('✅ Contraseña cambiada exitosamente.');
 }
 
 // ── TABS ──
