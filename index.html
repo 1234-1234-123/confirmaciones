@@ -1218,55 +1218,115 @@ async function crearUsuario() {
   const email  = document.getElementById('nu_email')?.value.trim().toLowerCase() || '';
   const centro = document.getElementById('nu_centro').value;
 
-  if (!user || !pass || !email)              { showToast('⚠ Completa usuario, correo y contraseña.','#f59e0b'); return; }
-  if (pass.length < 8)                       { showToast('⚠ Contraseña mínimo 8 caracteres.','#f59e0b'); return; }
-  if (!/[A-Z]/.test(pass))                   { showToast('⚠ Contraseña debe tener una mayúscula.','#f59e0b'); return; }
-  if (!/[0-9]/.test(pass))                   { showToast('⚠ Contraseña debe tener un número.','#f59e0b'); return; }
-  if (rolSeleccionado!=='admin' && !centro)  { showToast('⚠ Selecciona el centro.','#f59e0b'); return; }
-  if (usuarios.find(u => u.email===email))   { showToast('⚠ Ese correo ya existe.','#f59e0b'); return; }
+  if (!user || !pass || !email) {
+    showToast('⚠ Completa usuario, correo y contraseña.', '#f59e0b');
+    return;
+  }
 
-  // Crear usuario via Edge Function segura
-  const authRes = await fetch(`${SUPABASE_URL}/functions/v1/crear-usuario`, {
-    method: 'POST',
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': `Bearer ${supabaseSession.access_token}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      email, password: pass, username: user,
+  if (pass.length < 8) {
+    showToast('⚠ Contraseña mínimo 8 caracteres.', '#f59e0b');
+    return;
+  }
+
+  if (!/[A-Z]/.test(pass)) {
+    showToast('⚠ Contraseña debe tener una mayúscula.', '#f59e0b');
+    return;
+  }
+
+  if (!/[0-9]/.test(pass)) {
+    showToast('⚠ Contraseña debe tener un número.', '#f59e0b');
+    return;
+  }
+
+  if ((rolSeleccionado === 'user' || rolSeleccionado === 'subjefe') && !centro) {
+    showToast('⚠ Selecciona un centro.', '#f59e0b');
+    return;
+  }
+
+  if (usuarios.find(u => u.email === email)) {
+    showToast('⚠ Ese correo ya existe.', '#f59e0b');
+    return;
+  }
+
+  try {
+    // IMPORTANTE:
+    // En Supabase la URL real de tu Edge Function es clever-service.
+    // Por eso aquí ya no usamos /crear-usuario.
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/clever-service`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${supabaseSession?.access_token || SUPABASE_KEY}`
+      },
+      body: JSON.stringify({
+        email: email,
+        password: pass,
+        username: user,
+        rol: rolSeleccionado,
+        centro: rolSeleccionado === 'admin' ? null : centro
+      })
+    });
+
+    let data = {};
+    try {
+      data = await res.json();
+    } catch (e) {
+      data = {};
+    }
+
+    console.log('RESPUESTA CREAR USUARIO:', data);
+
+    if (!res.ok || data.error) {
+      const msg = document.getElementById('adminMsg');
+      msg.style.display = 'block';
+      msg.style.background = '#fef2f2';
+      msg.style.color = '#dc2626';
+      msg.textContent = `❌ Error: ${data.error || data.message || 'No se pudo crear el usuario'}`;
+      return;
+    }
+
+    const nuevoUsuario = {
+      username: user,
+      email: email,
       rol: rolSeleccionado,
-      centro: rolSeleccionado==='admin' ? null : centro
-    })
-  });
-  const authData = await authRes.json();
+      auth_id: data.id || data.user?.id || data.auth_id || '',
+      centro: rolSeleccionado === 'admin' ? null : centro,
+      creadoPor: currentUser,
+      fechaCreacion: new Date().toLocaleString('es-GT')
+    };
 
-  if (!authRes.ok || authData.error) {
+    usuarios.push(nuevoUsuario);
+    guardarUsuarios();
+    registrarLog('CREAR_USUARIO', `${user} (${rolSeleccionado}) creado`);
+
+    document.getElementById('nu_user').value = '';
+    document.getElementById('nu_email').value = '';
+    document.getElementById('nu_pass').value = '';
+    document.getElementById('nu_centro').value = '';
+
+    selectRole('user');
+    renderUsuarios();
+
+    const msg = document.getElementById('adminMsg');
+    msg.style.display = 'block';
+    msg.style.background = '#f0fdf4';
+    msg.style.color = '#166534';
+    msg.textContent = `✅ Usuario "${user}" creado correctamente.`;
+
+    showToast(`✅ Usuario "${user}" creado correctamente.`);
+
+  } catch (e) {
+    console.log('ERROR CREAR USUARIO:', e);
+
     const msg = document.getElementById('adminMsg');
     msg.style.display = 'block';
     msg.style.background = '#fef2f2';
     msg.style.color = '#dc2626';
-    msg.textContent = `❌ Error: ${authData.error || 'No se pudo crear el usuario'}`;
-    return;
+    msg.textContent = '❌ Error de conexión con Supabase.';
+
+    showToast('❌ Error de conexión con Supabase.', '#ef4444');
   }
-
-  // Agregar a lista local
-  const nuevoUsuario = {
-    username: user, email, rol: rolSeleccionado, auth_id: authData.id,
-    centro: rolSeleccionado==='admin' ? null : centro,
-    creadoPor: currentUser, fechaCreacion: new Date().toLocaleDateString('es-GT')
-  };
-  usuarios.push(nuevoUsuario);
-  guardarUsuarios();
-  registrarLog('CREAR_USUARIO', `${user} (${rolSeleccionado}) creado`);
-
-  document.getElementById('nu_user').value  = '';
-  document.getElementById('nu_pass').value  = '';
-  if (document.getElementById('nu_email')) document.getElementById('nu_email').value = '';
-  document.getElementById('nu_centro').value = '';
-  selectRole('user');
-  renderUsuarios();
-  showToast(`✅ Usuario "${user}" creado correctamente.`);
 }
 
 function renderUsuarios() {
